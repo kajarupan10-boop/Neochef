@@ -51,6 +51,9 @@ https://017b3938-5597-48e9-b176-182bc317a58f.preview.emergentagent.com
 - ✅ Navigation fonctionnelle
 - ✅ PWA configurée (Service Worker, Manifest)
 - ✅ Responsive design
+- ✅ Création de restaurant via /api/auth/register-admin
+- ✅ Connexion utilisateur via /api/auth/login
+- ✅ Session token généré correctement
 
 ## Backlog / Améliorations futures
 - P1: Déploiement sur environnement de production .emergent.host
