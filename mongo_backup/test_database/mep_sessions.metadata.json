@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"f5f3a3305946491c9e36e0d2e3f12f1a","collectionName":"mep_sessions","type":"collection"}

@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"7323abdd659f4a4d865027029cc7f306","collectionName":"mep_event_drink_options","type":"collection"}

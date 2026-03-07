@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"a1f37615d2414a06bea4a902d1e9be09","collectionName":"mep_translations","type":"collection"}

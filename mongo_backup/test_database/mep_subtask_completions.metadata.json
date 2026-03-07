@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"9f8e61ec4cbe4b64b1c7d0cd1e1ebf4b","collectionName":"mep_subtask_completions","type":"collection"}

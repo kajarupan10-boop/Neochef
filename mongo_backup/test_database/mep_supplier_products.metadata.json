@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"5ace08e91e4d4c85a9232f53f427a972","collectionName":"mep_supplier_products","type":"collection"}

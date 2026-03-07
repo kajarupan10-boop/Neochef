@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"91ea27dd8eb34ae2ad501b87306cdfd3","collectionName":"mep_daily_tasks","type":"collection"}
