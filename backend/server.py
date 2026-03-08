@@ -14052,6 +14052,20 @@ async def api_health_check():
         "database": db_status
     }
 
+@app.get("/api/app")
+async def serve_app():
+    """Serve the main PWA application index.html"""
+    possible_paths = [
+        Path(__file__).parent / "dist" / "index.html",
+        Path("/app/backend/dist/index.html"),
+    ]
+    
+    for index_path in possible_paths:
+        if index_path.exists():
+            return FileResponse(str(index_path), media_type='text/html')
+    
+    return HTMLResponse(content='<h1>NeoChef - Application non trouvée</h1>', status_code=404)
+
 @app.get("/api/health")
 async def detailed_health_check():
     """Detailed health check for monitoring"""
