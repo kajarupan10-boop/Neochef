@@ -5632,18 +5632,16 @@ def create_menu_pdf(restaurant: dict, reservation: dict, sections: list, items: 
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # Couleur RAL 5008 (bleu gris) pour les éléments encadrés ET le logo
-    RAL_5008_BLUE = (26, 58, 92)  # #1A3A5C
-    
-    # Récupérer les couleurs du thème du restaurant (pour textes, etc.)
+    # Récupérer les couleurs du thème du restaurant
     primary_color = restaurant.get("primary_color", "#26252D")
     secondary_color = restaurant.get("secondary_color", "#EAE6CA")
     primary_rgb = hex_to_rgb(primary_color)
     secondary_rgb = hex_to_rgb(secondary_color)
     
-    # Couleurs pour les éléments encadrés: bleu RAL 5008 sur fond clair
-    accent_text_rgb = RAL_5008_BLUE  # Texte bleu RAL 5008
-    accent_bg_rgb = (230, 240, 250)  # Fond bleu très clair
+    # Utiliser les couleurs du restaurant pour tous les éléments
+    # (plus de RAL_5008_BLUE hardcodé)
+    accent_text_rgb = primary_rgb  # Texte couleur primaire du restaurant
+    accent_bg_rgb = secondary_rgb  # Fond couleur secondaire du restaurant
     
     # Marges
     left_margin = 15
@@ -5661,12 +5659,12 @@ def create_menu_pdf(restaurant: dict, reservation: dict, sections: list, items: 
     # Côté GAUCHE: Restaurant avec logo
     col_width = 85
     
-    # Logo du restaurant (petit, à gauche) - teinte en bleu RAL 5008
+    # Logo du restaurant (petit, à gauche) - teinte avec couleur primaire du restaurant
     if restaurant.get("logo_base64"):
         try:
             logo_data = base64.b64decode(restaurant["logo_base64"])
-            # Appliquer la teinte bleue RAL 5008 au logo
-            logo_data = apply_blue_tint_to_logo(logo_data, RAL_5008_BLUE)
+            # Appliquer la teinte couleur primaire au logo
+            logo_data = apply_blue_tint_to_logo(logo_data, primary_rgb)
             logo_io = BytesIO(logo_data)
             pdf.image(logo_io, x=left_margin, y=start_y, w=25)
         except:
@@ -10036,6 +10034,14 @@ async def export_menu_restaurant_excel(
     
     restaurant_id = current_user["restaurant_id"]
     
+    # Récupérer les couleurs du restaurant
+    restaurant = await restaurants_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "primary_color": 1, "secondary_color": 1}
+    )
+    primary_color = restaurant.get("primary_color", "#26252D") if restaurant else "#26252D"
+    secondary_color = restaurant.get("secondary_color", "#EAE6CA") if restaurant else "#EAE6CA"
+    
     # Get all sections for this menu type
     sections = await menu_restaurant_sections_collection.find({
         "restaurant_id": restaurant_id,
@@ -10093,9 +10099,11 @@ async def export_menu_restaurant_excel(
     ws = wb.active
     ws.title = f"Carte {menu_type.capitalize()}"
     
-    # Style for headers
-    header_fill = PatternFill(start_color="FF26252D", end_color="FF26252D", fill_type="solid")
-    header_font = Font(bold=True, color="FFEAE6CA", size=11)
+    # Style for headers - utiliser les couleurs du restaurant
+    primary_hex = primary_color.lstrip('#')
+    secondary_hex = secondary_color.lstrip('#')
+    header_fill = PatternFill(start_color=f"FF{primary_hex}", end_color=f"FF{primary_hex}", fill_type="solid")
+    header_font = Font(bold=True, color=f"FF{secondary_hex}", size=11)
     thin_border = Border(
         left=Side(style='thin'),
         right=Side(style='thin'),
