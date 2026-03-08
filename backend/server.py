@@ -8737,6 +8737,12 @@ async def export_fiche_pdf(
         {"_id": 0}
     )
     
+    # Obtenir les couleurs du restaurant
+    primary_color = restaurant.get("primary_color", "#26252D") if restaurant else "#26252D"
+    secondary_color = restaurant.get("secondary_color", "#EAE6CA") if restaurant else "#EAE6CA"
+    primary_rgb = hex_to_rgb(primary_color)
+    secondary_rgb = hex_to_rgb(secondary_color)
+    
     # Créer le PDF
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -8765,8 +8771,8 @@ async def export_fiche_pdf(
         ingredients = product.get("ingredients", [])
         if ingredients:
             pdf.set_font('Helvetica', 'B', 11)
-            pdf.set_fill_color(38, 37, 45)  # Couleur primaire
-            pdf.set_text_color(234, 230, 202)  # Couleur secondaire
+            pdf.set_fill_color(*primary_rgb)  # Couleur primaire du restaurant
+            pdf.set_text_color(*secondary_rgb)  # Couleur secondaire du restaurant
             
             # En-têtes selon include_prices (sans "quantité achetée")
             if include_prices:
