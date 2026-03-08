@@ -14054,7 +14054,13 @@ async def api_health_check():
 
 @app.get("/api/app")
 async def serve_app():
-    """Serve the main PWA application index.html"""
+    """Serve the main PWA application index.html with /api/ paths"""
+    # Utiliser la version avec les chemins /api/
+    api_index_path = Path(__file__).parent / "dist" / "index_api.html"
+    if api_index_path.exists():
+        return FileResponse(str(api_index_path), media_type='text/html')
+    
+    # Fallback sur l'index normal
     possible_paths = [
         Path(__file__).parent / "dist" / "index.html",
         Path("/app/backend/dist/index.html"),
@@ -14065,6 +14071,47 @@ async def serve_app():
             return FileResponse(str(index_path), media_type='text/html')
     
     return HTMLResponse(content='<h1>NeoChef - Application non trouvée</h1>', status_code=404)
+
+# Routes pour servir les fichiers PWA via /api/
+@app.get("/api/manifest.json")
+async def get_api_manifest():
+    """Serve PWA manifest via /api/"""
+    file_path = DIST_DIR / "manifest.json"
+    if file_path and file_path.exists():
+        return FileResponse(str(file_path), media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="Manifest not found")
+
+@app.get("/api/sw.js")
+async def get_api_sw():
+    """Serve Service Worker via /api/"""
+    file_path = DIST_DIR / "sw.js"
+    if file_path and file_path.exists():
+        return FileResponse(str(file_path), media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="Service Worker not found")
+
+@app.get("/api/apple-touch-icon.png")
+async def get_api_apple_icon():
+    """Serve Apple Touch Icon via /api/"""
+    file_path = DIST_DIR / "apple-touch-icon.png"
+    if file_path and file_path.exists():
+        return FileResponse(str(file_path), media_type="image/png")
+    raise HTTPException(status_code=404, detail="Icon not found")
+
+@app.get("/api/apple-touch-icon-180x180.png")
+async def get_api_apple_icon_180():
+    """Serve Apple Touch Icon 180x180 via /api/"""
+    file_path = DIST_DIR / "apple-touch-icon-180x180.png"
+    if file_path and file_path.exists():
+        return FileResponse(str(file_path), media_type="image/png")
+    raise HTTPException(status_code=404, detail="Icon not found")
+
+@app.get("/api/favicon.png")
+async def get_api_favicon():
+    """Serve Favicon via /api/"""
+    file_path = DIST_DIR / "favicon.png"
+    if file_path and file_path.exists():
+        return FileResponse(str(file_path), media_type="image/png")
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 @app.get("/api/health")
 async def detailed_health_check():
@@ -14128,11 +14175,25 @@ if DIST_DIR.exists():
     expo_static = DIST_DIR / "_expo"
     if expo_static.exists():
         app.mount("/_expo", StaticFiles(directory=str(expo_static)), name="expo_static")
+        # Also mount via /api/ path for production deployment
+        app.mount("/api/_expo", StaticFiles(directory=str(expo_static)), name="api_expo_static")
     
     # Mount assets folder
     assets_dir = DIST_DIR / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+        # Also mount via /api/ path for production deployment
+        app.mount("/api/assets", StaticFiles(directory=str(assets_dir)), name="api_assets")
+    
+    # Mount ardoise folder
+    ardoise_dir = DIST_DIR / "ardoise"
+    if ardoise_dir.exists():
+        app.mount("/api/ardoise", StaticFiles(directory=str(ardoise_dir)), name="api_ardoise")
+    
+    # Mount client folder
+    client_dir = DIST_DIR / "client"
+    if client_dir.exists():
+        app.mount("/api/client", StaticFiles(directory=str(client_dir)), name="api_client")
 
 @app.get("/manifest.json")
 async def get_manifest():
