@@ -1,110 +1,84 @@
 # NeoChef - Product Requirements Document
 
-## Overview
-NeoChef est une application PWA de gestion de restaurants, permettant la gestion des menus, réservations, facturation et ardoise quotidienne.
+## Original Problem Statement
+Application PWA pour la gestion de restaurants avec :
+- Gestion des menus (nourriture/boissons)
+- Système de réservations
+- Génération de factures et devis en PDF
+- Gestion multi-restaurants (Holding)
+- Menu public accessible via QR code
+- Système de permissions pour les utilisateurs
+- Fonctionnalités "Ardoise" (plats du jour)
 
 ## Stack Technique
-- **Frontend**: Expo for Web (React Native Web)
+- **Frontend**: React Native/Expo (build web statique)
 - **Backend**: FastAPI (Python)
-- **Database**: MongoDB
+- **Base de données**: MongoDB
+- **Déploiement**: Emergent Platform
 
-## Fonctionnalités Principales
+## Fonctionnalités Ardoise (IMPLÉMENTÉES)
 
-### 1. Gestion des Menus
-- Carte Food et Carte Boisson
-- Sections personnalisables
-- Prix et descriptions
+### Backend ✅ FONCTIONNEL
+Tous les endpoints API sont implémentés et testés :
 
-### 2. Menu Client Public (QR Code)
-- Accessible via `/client/{restaurant_id}`
-- Affichage responsive mobile
-- Filtre par allergènes
-- Support multilingue
+1. **GET /api/ardoise/public/{token}** - Récupérer l'ardoise
+2. **PUT /api/ardoise/public/{token}** - Modifier l'ardoise (plats + prix formules)
+3. **POST /api/ardoise/public/{token}/sales** - Enregistrer les ventes du service
+4. **GET /api/ardoise/sales/report/public/{token}?period=week** - Rapport de ventes
+5. **GET /api/ardoise/sales/export-pdf/{token}?period=week** - Export PDF
+6. **GET /api/ardoise/sales/export-excel/{token}?period=week** - Export Excel
 
-### 3. A L'ARDOISE (Menu du Jour)
-- Lien partageable permanent (`/ardoise/{token}`)
-- Édition des plats (Entrée, Plat, Dessert - 2 items chacun)
-- **Prix des formules éditables** (Plat du jour, E+P, P+D, E+P+D)
-- **Suivi des ventes** - Enregistrement des quantités vendues par service
-- Export PDF
+### Frontend (Code prêt, bloqué par cache CDN)
+Le code frontend implémente :
+- Mode Édition : modifier les plats et descriptions
+- Mode Ventes : saisir les quantités vendues par plat
+- Mode Rapports : visualiser les statistiques et exporter PDF/Excel
+- Édition des prix des formules
 
-### 4. Réservations
-- Gestion des créneaux
-- Notifications
+## Traductions
+7 langues générées : EN, ES, DE, IT, ZH, RU, PT
+31 traductions par langue pour les sections et plats de l'ardoise
 
-### 5. Facturation
-- Génération de factures et devis PDF
+## Restaurants de Test
+- **O'Parloir** (rest_17e485265f52) - Restaurant principal
+- **Le Cercle** (rest_efb3705687ef)
+- **Token Ardoise O'Parloir** : `3A72iGUORT3Ymx6zsrPcBQ`
 
-## Architecture
+## URLs
+- **Preview** : https://restaurant-preview-6.preview.emergentagent.com
+- **Production** : https://neochef-pwa-2.emergent.host
+- **Ardoise O'Parloir** : https://restaurant-preview-6.preview.emergentagent.com/ardoise/3A72iGUORT3Ymx6zsrPcBQ
 
-```
-/app
-├── backend/
-│   ├── server.py         # API FastAPI (~14k lignes)
-│   └── dist/             # Build Expo Web statique
-└── temp_clone/
-    └── frontend/
-        └── app/
-            ├── index.tsx            # App principale
-            ├── client/[restaurant_id].tsx  # Menu client public
-            └── ardoise/[token].tsx         # Interface ardoise
-```
+## Problèmes Connus
 
-## Collections MongoDB
-- `users` - Utilisateurs
-- `mep_restaurants` - Restaurants
-- `mep_ardoise` - Données de l'ardoise (plats, prix formules)
-- `mep_ardoise_sales` - Historique des ventes de l'ardoise
-- `menu_restaurant_sections` - Sections du menu
-- `menu_restaurant_items` - Articles du menu
+### ⚠️ Cache CDN (BLOQUANT)
+Le cache Cloudflare au niveau de la plateforme Emergent empêche les mises à jour frontend de s'afficher. Solutions :
+1. Redéployer via le bouton "Deploy"
+2. Contacter support@emergent.sh pour purger le cache
+3. Attendre l'expiration naturelle du cache
 
-## API Endpoints Clés
+### Issues en attente
+1. **Espace noir en bas de l'écran** - Non reproduit dans les tests
+2. **Visibilité ardoise sur menu client** - Section activée, restriction d'heure supprimée
 
-### Ardoise
-- `GET /api/ardoise/public/{token}` - Récupérer l'ardoise
-- `PUT /api/ardoise/public/{token}` - Mettre à jour l'ardoise (plats + formule_prices)
-- `POST /api/ardoise/public/{token}/sales` - Enregistrer les ventes
-- `GET /api/ardoise/sales` - Récupérer l'historique des ventes
+## Fichiers Clés
+- `/app/backend/server.py` - Backend FastAPI (15k+ lignes)
+- `/app/temp_clone/frontend/app/ardoise/[token].tsx` - Page gestion ardoise
+- `/app/temp_clone/frontend/app/client/[restaurant_id].tsx` - Menu client public
 
-### Menu Client
-- `GET /api/restaurants/{id}/public` - Info restaurant public
-- `GET /api/menu-restaurant/public/{id}` - Menu public
+## Changelog
 
-## Implémenté (09/03/2026)
+### 2026-03-09
+- Activé la section A L'ARDOISE pour O'Parloir
+- Ajouté données de test pour l'ardoise (2 entrées, 2 plats, 2 desserts)
+- Généré traductions pour 7 langues
+- Supprimé restriction d'heure (ardoise visible toute la journée)
+- Corrigé bug qui cachait section sans items réguliers
+- Testé toutes les APIs backend (PUT prix, POST ventes, GET rapports, exports)
+- Tenté plusieurs méthodes pour bypass cache CDN (sans succès)
 
-### Bug Fixes
-- ✅ Correction du bug "Restaurant non trouvé" sur les pages client
-  - Cause: Double préfixe `/api/api/` dans les appels frontend
-  - Solution: Routes dupliquées côté backend pour gérer le cache CDN
-- ✅ Correction de l'espace noir en bas de l'écran
-  - Ajout de styles CSS flexbox pour forcer les conteneurs à remplir l'espace
-  - Ajout de `paddingBottom` conditionnel pour les écrans sans barre de navigation sur iOS
-
-### Nouvelles Fonctionnalités Ardoise
-- ✅ **Prix des formules éditables** - Les prix (Plat du jour, E+P, P+D, E+P+D) sont maintenant stockés en base et modifiables
-- ✅ **Suivi des quantités vendues** - Nouveau champ `quantity_sold` pour chaque plat
-- ✅ **Endpoint de sauvegarde des ventes** - `/api/ardoise/public/{token}/sales`
-- ✅ **Collection `mep_ardoise_sales`** pour l'historique
-- ✅ **Rapports de ventes** - Visualisation des statistiques par jour/semaine/mois
-- ✅ **Export PDF** - Rapport complet des ventes avec détails par plat et par jour
-- ✅ **Export Excel** - Fichier Excel avec 3 feuilles (Résumé, Par Plat, Par Jour)
-
-### Frontend Ardoise Mis à Jour
-- Boutons "Édition", "Ventes" et "Rapports" séparés
-- Section édition des prix de formules avec icône stylo
-- Mode "Ventes" pour saisir les quantités vendues
-- Mode "Rapports" avec cartes statistiques, top des ventes et exports
-- Sauvegarde automatique vers la base de données
-
-## Backlog
-
-### P2 - Améliorations
-- [ ] PDF génération nécessite plusieurs clics sur mobile
-- [ ] Refactoring du fichier index.tsx (21k+ lignes)
-
-### P3 - Bloqué
-- [ ] Déploiement en production (limitation plateforme Emergent)
-
-## Notes Techniques
-- Le workflow de build nécessite: modifier source → `npx expo export --platform web` → copier dist → appliquer patches CSS
-- Le cache CDN d'Emergent peut retarder la visibilité des changements frontend
+## Backlog / Future Tasks
+1. Corriger l'espace noir en bas de l'écran
+2. Déployer en production avec corrections
+3. Décomposer le fichier monolithique index.tsx
+4. Automatiser le processus de build
