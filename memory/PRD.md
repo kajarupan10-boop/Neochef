@@ -42,7 +42,7 @@ Migration de l'application NeoChef PWA de gestion de restaurant vers Emergent Pl
 - [x] Tests de validation (100% passés)
 
 ## URL de Production
-https://017b3938-5597-48e9-b176-182bc317a58f.preview.emergentagent.com
+https://menu-system-10.preview.emergentagent.com
 
 ## Tests effectués
 - ✅ API /api/health - MongoDB connecté
