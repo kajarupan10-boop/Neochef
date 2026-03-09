@@ -11652,6 +11652,35 @@ async def get_ardoise_share_link(current_user: dict = Depends(get_current_user))
         "message": "Ce lien est permanent et ne change jamais. Partagez-le avec votre équipe."
     }
 
+@api_router.get("/ardoise/page/{share_token}")
+async def get_ardoise_page(share_token: str):
+    """Sert la page HTML de l'ardoise directement (bypass cache CDN)"""
+    from fastapi.responses import HTMLResponse
+    
+    # Verify token exists
+    ardoise = await ardoise_collection.find_one({"share_token": share_token})
+    if not ardoise:
+        raise HTTPException(status_code=404, detail="Ardoise non trouvée")
+    
+    # Read the HTML file
+    html_path = DIST_DIR / "ardoise" / "[token].html"
+    if not html_path.exists():
+        raise HTTPException(status_code=500, detail="Page non disponible")
+    
+    html_content = html_path.read_text()
+    
+    # Return with strong no-cache headers
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Surrogate-Control": "no-store",
+            "X-Accel-Expires": "0"
+        }
+    )
+
 @api_router.get("/ardoise/public/{share_token}")
 async def get_public_ardoise(share_token: str):
     """Récupérer l'ardoise via le lien public (sans authentification)"""
@@ -14858,6 +14887,11 @@ if DIST_DIR is None:
 
 # Mount static files from Expo web build
 if DIST_DIR.exists():
+    # Mount _fresh static assets (new cache-busting path)
+    fresh_static = DIST_DIR / "_fresh"
+    if fresh_static.exists():
+        app.mount("/_fresh", StaticFiles(directory=str(fresh_static)), name="fresh_static")
+    
     # Mount _expo static assets first (JS, CSS, etc.)
     expo_static = DIST_DIR / "_expo"
     if expo_static.exists():
@@ -15022,15 +15056,29 @@ async def serve_spa(full_path: str):
         }
         media_type = content_types.get(suffix, 'application/octet-stream')
         
-        # Add cache headers based on file type
-        headers = {}
-        if suffix == '.html':
-            headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
-        elif suffix == '.js' or suffix == '.css':
-            # JS/CSS avec hash dans le nom peuvent être mis en cache
-            headers = {"Cache-Control": "public, max-age=31536000"}
+        # Add cache headers based on file type - FORCE NO CACHE for all
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Surrogate-Control": "no-store"
+        }
         
         return FileResponse(str(dist_file), media_type=media_type, headers=headers)
+    
+    # For gestion-ardoise pages (new path to bypass cache)
+    if full_path.startswith("gestion-ardoise/"):
+        ardoise_html = DIST_DIR / "gestion-ardoise" / "[token].html"
+        if ardoise_html.exists():
+            headers = {"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0", "Surrogate-Control": "no-store"}
+            return FileResponse(str(ardoise_html), media_type='text/html', headers=headers)
+    
+    # For ardoise pages, serve the [token].html template
+    if full_path.startswith("ardoise/"):
+        ardoise_html = DIST_DIR / "ardoise" / "[token].html"
+        if ardoise_html.exists():
+            headers = {"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0", "Surrogate-Control": "no-store"}
+            return FileResponse(str(ardoise_html), media_type='text/html', headers=headers)
     
     # For client pages, serve the [restaurant_id].html template
     if full_path.startswith("client/"):
