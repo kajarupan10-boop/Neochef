@@ -82,17 +82,20 @@ NeoChef est une application PWA de gestion de restaurants, permettant la gestion
 - ✅ **Suivi des quantités vendues** - Nouveau champ `quantity_sold` pour chaque plat
 - ✅ **Endpoint de sauvegarde des ventes** - `/api/ardoise/public/{token}/sales`
 - ✅ **Collection `mep_ardoise_sales`** pour l'historique
+- ✅ **Rapports de ventes** - Visualisation des statistiques par jour/semaine/mois
+- ✅ **Export PDF** - Rapport complet des ventes avec détails par plat et par jour
+- ✅ **Export Excel** - Fichier Excel avec 3 feuilles (Résumé, Par Plat, Par Jour)
 
 ### Frontend Ardoise Mis à Jour
-- Boutons "Édition" et "Ventes" séparés
+- Boutons "Édition", "Ventes" et "Rapports" séparés
 - Section édition des prix de formules avec icône stylo
 - Mode "Ventes" pour saisir les quantités vendues
+- Mode "Rapports" avec cartes statistiques, top des ventes et exports
 - Sauvegarde automatique vers la base de données
 
 ## Backlog
 
 ### P1 - Prioritaire
-- [ ] Rapports de ventes de l'ardoise (visualisation jour/semaine, export PDF/Excel)
 - [ ] Espace noir en bas de l'écran sur certaines pages
 
 ### P2 - Améliorations

@@ -6499,7 +6499,7 @@ async def get_invoice_pdf(
     )
     
     # Générer le PDF
-    pdf_buffer = io.BytesIO()
+    pdf_buffer = BytesIO()
     c = canvas.Canvas(pdf_buffer, pagesize=A4)
     width, height = A4
     
@@ -11827,6 +11827,465 @@ async def get_ardoise_sales(
     ).sort("date", -1).to_list(100)
     
     return {"sales": sales}
+
+@api_router.get("/ardoise/sales/report")
+async def get_ardoise_sales_report(
+    period: str = "week",  # "day", "week", "month"
+    current_user: dict = Depends(get_current_user)
+):
+    """Récupérer un rapport agrégé des ventes de l'ardoise"""
+    restaurant_id = current_user["restaurant_id"]
+    
+    # Calculer les dates de début selon la période
+    today = datetime.now(timezone.utc).date()
+    if period == "day":
+        start_date = today.isoformat()
+    elif period == "week":
+        start_date = (today - timedelta(days=7)).isoformat()
+    else:  # month
+        start_date = (today - timedelta(days=30)).isoformat()
+    
+    # Récupérer toutes les ventes de la période
+    sales = await ardoise_sales_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": start_date}
+        },
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    # Agréger les données
+    total_entrees = 0
+    total_plats = 0
+    total_desserts = 0
+    items_stats = {}  # {item_name: {total_qty, category}}
+    
+    for sale in sales:
+        for item in sale.get("entree", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_entrees += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "entree"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("plat", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_plats += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "plat"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("dessert", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_desserts += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "dessert"}
+                items_stats[name]["total_qty"] += qty
+    
+    # Trier les items par quantité vendue
+    top_items = sorted(
+        [{"name": k, **v} for k, v in items_stats.items()],
+        key=lambda x: x["total_qty"],
+        reverse=True
+    )[:10]
+    
+    return {
+        "period": period,
+        "start_date": start_date,
+        "end_date": today.isoformat(),
+        "total_services": len(sales),
+        "totals": {
+            "entrees": total_entrees,
+            "plats": total_plats,
+            "desserts": total_desserts,
+            "total": total_entrees + total_plats + total_desserts
+        },
+        "top_items": top_items,
+        "daily_breakdown": sales
+    }
+
+@api_router.get("/ardoise/sales/report/public/{share_token}")
+async def get_ardoise_sales_report_public(
+    share_token: str,
+    period: str = "week"
+):
+    """Récupérer un rapport des ventes via le lien public"""
+    ardoise = await ardoise_collection.find_one({"share_token": share_token})
+    
+    if not ardoise:
+        raise HTTPException(status_code=404, detail="Ardoise non trouvée")
+    
+    restaurant_id = ardoise["restaurant_id"]
+    
+    today = datetime.now(timezone.utc).date()
+    if period == "day":
+        start_date = today.isoformat()
+    elif period == "week":
+        start_date = (today - timedelta(days=7)).isoformat()
+    else:
+        start_date = (today - timedelta(days=30)).isoformat()
+    
+    sales = await ardoise_sales_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": start_date}
+        },
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    # Agréger les données
+    total_entrees = 0
+    total_plats = 0
+    total_desserts = 0
+    items_stats = {}
+    
+    for sale in sales:
+        for item in sale.get("entree", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_entrees += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "entree"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("plat", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_plats += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "plat"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("dessert", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_desserts += qty
+            name = item.get("name", "")
+            if name:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "dessert"}
+                items_stats[name]["total_qty"] += qty
+    
+    top_items = sorted(
+        [{"name": k, **v} for k, v in items_stats.items()],
+        key=lambda x: x["total_qty"],
+        reverse=True
+    )[:10]
+    
+    return {
+        "period": period,
+        "start_date": start_date,
+        "end_date": today.isoformat(),
+        "total_services": len(sales),
+        "totals": {
+            "entrees": total_entrees,
+            "plats": total_plats,
+            "desserts": total_desserts,
+            "total": total_entrees + total_plats + total_desserts
+        },
+        "top_items": top_items,
+        "daily_breakdown": sales
+    }
+
+@api_router.get("/ardoise/sales/export-pdf/{share_token}")
+async def export_ardoise_sales_pdf(
+    share_token: str,
+    period: str = "week"
+):
+    """Exporter le rapport des ventes en PDF"""
+    ardoise = await ardoise_collection.find_one({"share_token": share_token})
+    
+    if not ardoise:
+        raise HTTPException(status_code=404, detail="Ardoise non trouvée")
+    
+    restaurant_id = ardoise["restaurant_id"]
+    
+    # Récupérer le nom du restaurant
+    restaurant = await restaurants_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "name": 1}
+    )
+    restaurant_name = restaurant.get("name", "Restaurant") if restaurant else "Restaurant"
+    
+    today = datetime.now(timezone.utc).date()
+    if period == "day":
+        start_date = today.isoformat()
+        period_label = "Aujourd'hui"
+    elif period == "week":
+        start_date = (today - timedelta(days=7)).isoformat()
+        period_label = "7 derniers jours"
+    else:
+        start_date = (today - timedelta(days=30)).isoformat()
+        period_label = "30 derniers jours"
+    
+    sales = await ardoise_sales_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": start_date}
+        },
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    # Agréger les données
+    items_stats = {}
+    for sale in sales:
+        for section in ["entree", "plat", "dessert"]:
+            for item in sale.get(section, []):
+                qty = item.get("quantity_sold", 0) or 0
+                name = item.get("name", "")
+                if name:
+                    if name not in items_stats:
+                        items_stats[name] = {"total_qty": 0, "category": section}
+                    items_stats[name]["total_qty"] += qty
+    
+    # Générer le PDF avec FPDF
+    class ArdoisePDF(FPDF):
+        def header(self):
+            self.set_font("Helvetica", "B", 18)
+            self.cell(0, 10, restaurant_name, align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "B", 14)
+            self.cell(0, 8, "Rapport des Ventes - Ardoise", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.ln(5)
+        
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("Helvetica", "I", 8)
+            self.cell(0, 10, f"Genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')} - NeoChef", align="C")
+    
+    pdf = ArdoisePDF()
+    pdf.add_page()
+    
+    # Période
+    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(0, 8, f"Periode: {period_label}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Du {start_date} au {today.isoformat()}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(10)
+    
+    # Statistiques globales
+    total_qty = sum(item["total_qty"] for item in items_stats.values())
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Resume", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Nombre de services: {len(sales)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Total plats vendus: {total_qty}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(10)
+    
+    # Détail par plat
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Detail par plat", new_x="LMARGIN", new_y="NEXT")
+    
+    # En-têtes du tableau
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_fill_color(255, 209, 102)
+    pdf.cell(100, 8, "Plat", border=1, fill=True)
+    pdf.cell(40, 8, "Categorie", border=1, fill=True)
+    pdf.cell(40, 8, "Quantite", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_font("Helvetica", "", 9)
+    sorted_items = sorted(items_stats.items(), key=lambda x: x[1]["total_qty"], reverse=True)
+    
+    for name, data in sorted_items:
+        display_name = name[:35] + "..." if len(name) > 35 else name
+        cat_label = {"entree": "Entree", "plat": "Plat", "dessert": "Dessert"}.get(data["category"], data["category"])
+        pdf.cell(100, 7, display_name, border=1)
+        pdf.cell(40, 7, cat_label, border=1)
+        pdf.cell(40, 7, str(data["total_qty"]), border=1, new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.ln(10)
+    
+    # Détail par jour
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Detail par jour", new_x="LMARGIN", new_y="NEXT")
+    
+    # En-têtes
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_fill_color(255, 209, 102)
+    pdf.cell(35, 8, "Date", border=1, fill=True)
+    pdf.cell(30, 8, "Service", border=1, fill=True)
+    pdf.cell(30, 8, "Entrees", border=1, fill=True)
+    pdf.cell(30, 8, "Plats", border=1, fill=True)
+    pdf.cell(30, 8, "Desserts", border=1, fill=True)
+    pdf.cell(30, 8, "Total", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_font("Helvetica", "", 9)
+    for sale in sales:
+        entree_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("entree", []))
+        plat_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("plat", []))
+        dessert_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("dessert", []))
+        
+        pdf.cell(35, 7, sale.get("date", ""), border=1)
+        pdf.cell(30, 7, sale.get("service", "").capitalize(), border=1)
+        pdf.cell(30, 7, str(entree_qty), border=1, align="C")
+        pdf.cell(30, 7, str(plat_qty), border=1, align="C")
+        pdf.cell(30, 7, str(dessert_qty), border=1, align="C")
+        pdf.cell(30, 7, str(entree_qty + plat_qty + dessert_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+    
+    # Générer le buffer
+    buffer = BytesIO(pdf.output())
+    
+    filename = f"rapport_ventes_{start_date}_{today.isoformat()}.pdf"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/ardoise/sales/export-excel/{share_token}")
+async def export_ardoise_sales_excel(
+    share_token: str,
+    period: str = "week"
+):
+    """Exporter le rapport des ventes en Excel"""
+    ardoise = await ardoise_collection.find_one({"share_token": share_token})
+    
+    if not ardoise:
+        raise HTTPException(status_code=404, detail="Ardoise non trouvée")
+    
+    restaurant_id = ardoise["restaurant_id"]
+    
+    restaurant = await restaurants_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "name": 1}
+    )
+    restaurant_name = restaurant.get("name", "Restaurant") if restaurant else "Restaurant"
+    
+    today = datetime.now(timezone.utc).date()
+    if period == "day":
+        start_date = today.isoformat()
+    elif period == "week":
+        start_date = (today - timedelta(days=7)).isoformat()
+    else:
+        start_date = (today - timedelta(days=30)).isoformat()
+    
+    sales = await ardoise_sales_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": start_date}
+        },
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    # Créer le fichier Excel avec openpyxl
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    
+    wb = Workbook()
+    
+    # Feuille 1: Résumé
+    ws_summary = wb.active
+    ws_summary.title = "Résumé"
+    
+    # Styles
+    header_font = Font(bold=True, size=14)
+    title_font = Font(bold=True, size=18)
+    header_fill = PatternFill(start_color="FFD166", end_color="FFD166", fill_type="solid")
+    
+    ws_summary["A1"] = restaurant_name
+    ws_summary["A1"].font = title_font
+    ws_summary["A2"] = f"Rapport des ventes - Ardoise"
+    ws_summary["A3"] = f"Période: {start_date} au {today.isoformat()}"
+    
+    ws_summary["A5"] = "Statistiques globales"
+    ws_summary["A5"].font = header_font
+    ws_summary["A6"] = "Nombre de services:"
+    ws_summary["B6"] = len(sales)
+    
+    # Agréger par plat
+    items_stats = {}
+    for sale in sales:
+        for section in ["entree", "plat", "dessert"]:
+            for item in sale.get(section, []):
+                qty = item.get("quantity_sold", 0) or 0
+                name = item.get("name", "")
+                if name:
+                    if name not in items_stats:
+                        items_stats[name] = {"total_qty": 0, "category": section}
+                    items_stats[name]["total_qty"] += qty
+    
+    total_qty = sum(item["total_qty"] for item in items_stats.values())
+    ws_summary["A7"] = "Total plats vendus:"
+    ws_summary["B7"] = total_qty
+    
+    # Feuille 2: Détail par plat
+    ws_items = wb.create_sheet("Par Plat")
+    ws_items["A1"] = "Plat"
+    ws_items["B1"] = "Catégorie"
+    ws_items["C1"] = "Quantité vendue"
+    
+    for col in ["A1", "B1", "C1"]:
+        ws_items[col].font = Font(bold=True)
+        ws_items[col].fill = header_fill
+    
+    row = 2
+    sorted_items = sorted(items_stats.items(), key=lambda x: x[1]["total_qty"], reverse=True)
+    for name, data in sorted_items:
+        ws_items[f"A{row}"] = name
+        cat_label = {"entree": "Entrée", "plat": "Plat", "dessert": "Dessert"}.get(data["category"], data["category"])
+        ws_items[f"B{row}"] = cat_label
+        ws_items[f"C{row}"] = data["total_qty"]
+        row += 1
+    
+    # Feuille 3: Détail par jour
+    ws_daily = wb.create_sheet("Par Jour")
+    ws_daily["A1"] = "Date"
+    ws_daily["B1"] = "Service"
+    ws_daily["C1"] = "Entrées"
+    ws_daily["D1"] = "Plats"
+    ws_daily["E1"] = "Desserts"
+    ws_daily["F1"] = "Total"
+    
+    for col in ["A1", "B1", "C1", "D1", "E1", "F1"]:
+        ws_daily[col].font = Font(bold=True)
+        ws_daily[col].fill = header_fill
+    
+    row = 2
+    for sale in sales:
+        entree_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("entree", []))
+        plat_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("plat", []))
+        dessert_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("dessert", []))
+        
+        ws_daily[f"A{row}"] = sale.get("date", "")
+        ws_daily[f"B{row}"] = sale.get("service", "").capitalize()
+        ws_daily[f"C{row}"] = entree_qty
+        ws_daily[f"D{row}"] = plat_qty
+        ws_daily[f"E{row}"] = dessert_qty
+        ws_daily[f"F{row}"] = entree_qty + plat_qty + dessert_qty
+        row += 1
+    
+    # Ajuster la largeur des colonnes
+    for ws in [ws_summary, ws_items, ws_daily]:
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+    
+    # Sauvegarder dans un buffer
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"rapport_ventes_{start_date}_{today.isoformat()}.xlsx"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 @api_router.get("/ardoise/export-pdf")
 async def export_ardoise_pdf(current_user: dict = Depends(get_current_user)):
