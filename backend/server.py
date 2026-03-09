@@ -267,6 +267,7 @@ privatisation_spaces_collection = db.mep_privatisation_spaces
 
 # A L'ARDOISE Collection (Shareable Menu Board)
 ardoise_collection = db.mep_ardoise  # Menu "A l'Ardoise" avec lien partageable
+ardoise_sales_collection = db.mep_ardoise_sales  # Historique des ventes de l'ardoise
 
 # Translations Collection (for instant language switching)
 translations_collection = db.mep_translations  # Store pre-computed translations
@@ -11473,15 +11474,23 @@ class ArdoiseItem(BaseModel):
     name: str = ""
     description: str = ""
     price: Optional[float] = None
+    quantity_sold: Optional[int] = None  # Quantité vendue à la fin du service
 
 class ArdoiseSection(BaseModel):
     title: str
     items: List[ArdoiseItem]
 
+class FormulePrices(BaseModel):
+    plat_du_jour: Optional[float] = 15.90
+    entree_plat: Optional[float] = 18.90
+    plat_dessert: Optional[float] = 18.90
+    entree_plat_dessert: Optional[float] = 23.90
+
 class UpdateArdoiseRequest(BaseModel):
     entree: List[ArdoiseItem]
     plat: List[ArdoiseItem]
     dessert: List[ArdoiseItem]
+    formule_prices: Optional[FormulePrices] = None
 
 @api_router.get("/ardoise")
 async def get_ardoise(current_user: dict = Depends(get_current_user)):
@@ -11500,22 +11509,37 @@ async def get_ardoise(current_user: dict = Depends(get_current_user)):
             "restaurant_id": restaurant_id,
             "share_token": secrets.token_urlsafe(32),
             "entree": [
-                {"name": "", "description": "", "price": None},
-                {"name": "", "description": "", "price": None}
+                {"name": "", "description": "", "price": None, "quantity_sold": None},
+                {"name": "", "description": "", "price": None, "quantity_sold": None}
             ],
             "plat": [
-                {"name": "", "description": "", "price": None},
-                {"name": "", "description": "", "price": None}
+                {"name": "", "description": "", "price": None, "quantity_sold": None},
+                {"name": "", "description": "", "price": None, "quantity_sold": None}
             ],
             "dessert": [
-                {"name": "", "description": "", "price": None},
-                {"name": "", "description": "", "price": None}
+                {"name": "", "description": "", "price": None, "quantity_sold": None},
+                {"name": "", "description": "", "price": None, "quantity_sold": None}
             ],
+            "formule_prices": {
+                "plat_du_jour": 15.90,
+                "entree_plat": 18.90,
+                "plat_dessert": 18.90,
+                "entree_plat_dessert": 23.90
+            },
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         await ardoise_collection.insert_one(ardoise)
         ardoise.pop("_id", None)
+    else:
+        # Ajouter les prix de formules par défaut si absents
+        if "formule_prices" not in ardoise:
+            ardoise["formule_prices"] = {
+                "plat_du_jour": 15.90,
+                "entree_plat": 18.90,
+                "plat_dessert": 18.90,
+                "entree_plat_dessert": 23.90
+            }
     
     return ardoise
 
@@ -11534,6 +11558,10 @@ async def update_ardoise(request: UpdateArdoiseRequest, current_user: dict = Dep
         "dessert": [item.dict() for item in request.dessert],
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
+    
+    # Ajouter les prix de formules si fournis
+    if request.formule_prices:
+        update_data["formule_prices"] = request.formule_prices.dict()
     
     result = await ardoise_collection.update_one(
         {"restaurant_id": restaurant_id},
@@ -11607,11 +11635,20 @@ async def get_public_ardoise(share_token: str):
         {"_id": 0, "name": 1}
     )
     
+    # Prix des formules par défaut si absents
+    formule_prices = ardoise.get("formule_prices", {
+        "plat_du_jour": 15.90,
+        "entree_plat": 18.90,
+        "plat_dessert": 18.90,
+        "entree_plat_dessert": 23.90
+    })
+    
     return {
         "restaurant_name": restaurant.get("name", "Restaurant") if restaurant else "Restaurant",
         "entree": ardoise.get("entree", []),
         "plat": ardoise.get("plat", []),
         "dessert": ardoise.get("dessert", []),
+        "formule_prices": formule_prices,
         "updated_at": ardoise.get("updated_at")
     }
 
@@ -11628,13 +11665,25 @@ async def get_ardoise_by_restaurant(restaurant_id: str):
         return {
             "entree": [],
             "plat": [],
-            "dessert": []
+            "dessert": [],
+            "formule_prices": {
+                "plat_du_jour": 15.90,
+                "entree_plat": 18.90,
+                "plat_dessert": 18.90,
+                "entree_plat_dessert": 23.90
+            }
         }
     
     return {
         "entree": ardoise.get("entree", []),
         "plat": ardoise.get("plat", []),
-        "dessert": ardoise.get("dessert", [])
+        "dessert": ardoise.get("dessert", []),
+        "formule_prices": ardoise.get("formule_prices", {
+            "plat_du_jour": 15.90,
+            "entree_plat": 18.90,
+            "plat_dessert": 18.90,
+            "entree_plat_dessert": 23.90
+        })
     }
 
 @api_router.put("/ardoise/public/{share_token}")
@@ -11656,12 +11705,128 @@ async def update_public_ardoise(share_token: str, request: UpdateArdoiseRequest)
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
+    # Ajouter les prix de formules si fournis
+    if request.formule_prices:
+        update_data["formule_prices"] = request.formule_prices.dict()
+    
     await ardoise_collection.update_one(
         {"share_token": share_token},
         {"$set": update_data}
     )
     
     return {"message": "Ardoise mise à jour avec succès"}
+
+# ==================== ARDOISE SALES TRACKING ====================
+
+class ArdoiseSalesRecord(BaseModel):
+    """Enregistrement des ventes de l'ardoise pour un service"""
+    date: str  # Format YYYY-MM-DD
+    service: str = "midi"  # "midi" ou "soir"
+    entree: List[dict] = []  # [{name, quantity_sold}]
+    plat: List[dict] = []
+    dessert: List[dict] = []
+    formule_prices: Optional[dict] = None
+    notes: Optional[str] = None
+
+@api_router.post("/ardoise/sales")
+async def save_ardoise_sales(sales: ArdoiseSalesRecord, current_user: dict = Depends(get_current_user)):
+    """Enregistrer les ventes de l'ardoise à la fin d'un service"""
+    restaurant_id = current_user["restaurant_id"]
+    
+    sales_record = {
+        "restaurant_id": restaurant_id,
+        "date": sales.date,
+        "service": sales.service,
+        "entree": sales.entree,
+        "plat": sales.plat,
+        "dessert": sales.dessert,
+        "formule_prices": sales.formule_prices,
+        "notes": sales.notes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Vérifier si un enregistrement existe déjà pour cette date et ce service
+    existing = await ardoise_sales_collection.find_one({
+        "restaurant_id": restaurant_id,
+        "date": sales.date,
+        "service": sales.service
+    })
+    
+    if existing:
+        # Mettre à jour l'existant
+        await ardoise_sales_collection.update_one(
+            {"restaurant_id": restaurant_id, "date": sales.date, "service": sales.service},
+            {"$set": sales_record}
+        )
+        return {"message": "Ventes mises à jour avec succès"}
+    else:
+        # Créer un nouvel enregistrement
+        await ardoise_sales_collection.insert_one(sales_record)
+        return {"message": "Ventes enregistrées avec succès"}
+
+@api_router.post("/ardoise/public/{share_token}/sales")
+async def save_ardoise_sales_public(share_token: str, sales: ArdoiseSalesRecord):
+    """Enregistrer les ventes de l'ardoise via le lien public"""
+    ardoise = await ardoise_collection.find_one({"share_token": share_token})
+    
+    if not ardoise:
+        raise HTTPException(status_code=404, detail="Ardoise non trouvée")
+    
+    restaurant_id = ardoise["restaurant_id"]
+    
+    sales_record = {
+        "restaurant_id": restaurant_id,
+        "date": sales.date,
+        "service": sales.service,
+        "entree": sales.entree,
+        "plat": sales.plat,
+        "dessert": sales.dessert,
+        "formule_prices": sales.formule_prices,
+        "notes": sales.notes,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Vérifier si un enregistrement existe déjà
+    existing = await ardoise_sales_collection.find_one({
+        "restaurant_id": restaurant_id,
+        "date": sales.date,
+        "service": sales.service
+    })
+    
+    if existing:
+        await ardoise_sales_collection.update_one(
+            {"restaurant_id": restaurant_id, "date": sales.date, "service": sales.service},
+            {"$set": sales_record}
+        )
+        return {"message": "Ventes mises à jour avec succès"}
+    else:
+        await ardoise_sales_collection.insert_one(sales_record)
+        return {"message": "Ventes enregistrées avec succès"}
+
+@api_router.get("/ardoise/sales")
+async def get_ardoise_sales(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Récupérer l'historique des ventes de l'ardoise"""
+    restaurant_id = current_user["restaurant_id"]
+    
+    query = {"restaurant_id": restaurant_id}
+    
+    if start_date or end_date:
+        query["date"] = {}
+        if start_date:
+            query["date"]["$gte"] = start_date
+        if end_date:
+            query["date"]["$lte"] = end_date
+    
+    sales = await ardoise_sales_collection.find(
+        query,
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    return {"sales": sales}
 
 @api_router.get("/ardoise/export-pdf")
 async def export_ardoise_pdf(current_user: dict = Depends(get_current_user)):
