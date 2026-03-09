@@ -1577,15 +1577,49 @@ async def get_public_menu_fix(restaurant_id: str, menu_type: Optional[str] = Non
     """Redirect handler for double /api prefix bug"""
     return await get_public_menu(restaurant_id, menu_type)
 
-@api_router.get("/api/ardoise/public/{restaurant_id}")
-async def get_ardoise_public_fix(restaurant_id: str):
-    """Redirect handler for double /api prefix bug"""
-    return await get_ardoise_public(restaurant_id)
+@api_router.get("/api/ardoise/by-restaurant/{restaurant_id}")
+async def get_ardoise_by_restaurant_fix(restaurant_id: str):
+    """Redirect handler for double /api prefix bug - redirects to ardoise/by-restaurant"""
+    # Inline the logic since the function is defined later
+    ardoise = await ardoise_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0}
+    )
+    if not ardoise:
+        return {
+            "entree": [],
+            "plat": [],
+            "dessert": [],
+            "formule_prices": {
+                "plat_du_jour": 15.90,
+                "entree_plat": 18.90,
+                "plat_dessert": 18.90,
+                "entree_plat_dessert": 23.90
+            }
+        }
+    return {
+        "entree": ardoise.get("entree", []),
+        "plat": ardoise.get("plat", []),
+        "dessert": ardoise.get("dessert", []),
+        "formule_prices": ardoise.get("formule_prices", {
+            "plat_du_jour": 15.90,
+            "entree_plat": 18.90,
+            "plat_dessert": 18.90,
+            "entree_plat_dessert": 23.90
+        })
+    }
 
 @api_router.get("/api/public/translations/{restaurant_id}")
 async def get_public_translations_fix(restaurant_id: str):
-    """Redirect handler for double /api prefix bug"""
-    return await get_public_translations(restaurant_id)
+    """Redirect handler for double /api prefix bug - redirects to public/translations"""
+    # Inline the logic since the function is defined later
+    cached = await translations_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0}
+    )
+    if cached:
+        return cached.get("translations", {})
+    return {}
 
 @api_router.get("/restaurants/{restaurant_id}/public")
 async def get_restaurant_public(restaurant_id: str):

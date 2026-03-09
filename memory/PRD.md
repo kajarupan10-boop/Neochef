@@ -76,6 +76,9 @@ NeoChef est une application PWA de gestion de restaurants, permettant la gestion
 - ✅ Correction du bug "Restaurant non trouvé" sur les pages client
   - Cause: Double préfixe `/api/api/` dans les appels frontend
   - Solution: Routes dupliquées côté backend pour gérer le cache CDN
+- ✅ Correction de l'espace noir en bas de l'écran
+  - Ajout de styles CSS flexbox pour forcer les conteneurs à remplir l'espace
+  - Ajout de `paddingBottom` conditionnel pour les écrans sans barre de navigation sur iOS
 
 ### Nouvelles Fonctionnalités Ardoise
 - ✅ **Prix des formules éditables** - Les prix (Plat du jour, E+P, P+D, E+P+D) sont maintenant stockés en base et modifiables
@@ -94,9 +97,6 @@ NeoChef est une application PWA de gestion de restaurants, permettant la gestion
 - Sauvegarde automatique vers la base de données
 
 ## Backlog
-
-### P1 - Prioritaire
-- [ ] Espace noir en bas de l'écran sur certaines pages
 
 ### P2 - Améliorations
 - [ ] PDF génération nécessite plusieurs clics sur mobile
