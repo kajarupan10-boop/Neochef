@@ -1565,6 +1565,27 @@ async def update_restaurant(
 
 # ==================== PUBLIC CLIENT MENU ENDPOINTS (No auth required) ====================
 
+# Duplicate routes to handle /api/api/ prefix bug from cached frontend
+@api_router.get("/api/restaurants/{restaurant_id}/public")
+async def get_restaurant_public_fix(restaurant_id: str):
+    """Redirect handler for double /api prefix bug"""
+    return await get_restaurant_public(restaurant_id)
+
+@api_router.get("/api/menu-restaurant/public/{restaurant_id}")
+async def get_public_menu_fix(restaurant_id: str, menu_type: Optional[str] = None):
+    """Redirect handler for double /api prefix bug"""
+    return await get_public_menu(restaurant_id, menu_type)
+
+@api_router.get("/api/ardoise/public/{restaurant_id}")
+async def get_ardoise_public_fix(restaurant_id: str):
+    """Redirect handler for double /api prefix bug"""
+    return await get_ardoise_public(restaurant_id)
+
+@api_router.get("/api/public/translations/{restaurant_id}")
+async def get_public_translations_fix(restaurant_id: str):
+    """Redirect handler for double /api prefix bug"""
+    return await get_public_translations(restaurant_id)
+
 @api_router.get("/restaurants/{restaurant_id}/public")
 async def get_restaurant_public(restaurant_id: str):
     """Get public restaurant info (for client QR code view)"""
@@ -14296,6 +14317,23 @@ async def stop_keep_alive_task():
             pass
         logging.info("[KEEP-ALIVE] Background task stopped")
 
+# ==================== FIX FOR DOUBLE API PREFIX BUG ====================
+# Handle /api/api/... by internally rewriting to /api/... (bug from old frontend code)
+@app.middleware("http")
+async def fix_double_api_prefix(request: Request, call_next):
+    """Fix double /api/api/ prefix from cached frontend"""
+    path = request.url.path
+    if path.startswith("/api/api/"):
+        # Rewrite the path to remove the extra /api
+        new_path = path.replace("/api/api/", "/api/", 1)
+        # Create a new scope with the corrected path
+        scope = request.scope.copy()
+        scope["path"] = new_path
+        # Create a new request with the corrected scope
+        from starlette.requests import Request as StarletteRequest
+        request = StarletteRequest(scope, request.receive)
+    return await call_next(request)
+
 # ==================== CATCH-ALL ROUTE FOR SPA ====================
 # This must be at the very end, after all other routes
 @app.get("/{full_path:path}")
@@ -14325,12 +14363,29 @@ async def serve_spa(full_path: str):
             '.ttf': 'font/ttf',
         }
         media_type = content_types.get(suffix, 'application/octet-stream')
-        return FileResponse(str(dist_file), media_type=media_type)
+        
+        # Add cache headers based on file type
+        headers = {}
+        if suffix == '.html':
+            headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+        elif suffix == '.js' or suffix == '.css':
+            # JS/CSS avec hash dans le nom peuvent être mis en cache
+            headers = {"Cache-Control": "public, max-age=31536000"}
+        
+        return FileResponse(str(dist_file), media_type=media_type, headers=headers)
+    
+    # For client pages, serve the [restaurant_id].html template
+    if full_path.startswith("client/"):
+        client_html = DIST_DIR / "client" / "[restaurant_id].html"
+        if client_html.exists():
+            headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+            return FileResponse(str(client_html), media_type='text/html', headers=headers)
     
     # For all other routes, serve index.html (SPA routing)
     index_file = DIST_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(str(index_file), media_type='text/html')
+        headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+        return FileResponse(str(index_file), media_type='text/html', headers=headers)
     
     raise HTTPException(status_code=404, detail="Not found")
 

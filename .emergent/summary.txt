@@ -2,159 +2,188 @@
 L'utilisateur souhaite migrer une application PWA existante nommée NeoChef pour la gestion de restaurants. L'objectif principal est d'obtenir une URL de production stable et permanente (24/7), car l'environnement précédent ne le permettait pas.
 
 **PRODUCT REQUIREMENTS:**
-- **Stack Technologique**: Frontend React Native/Expo (build web statique), Backend FastAPI (Python), Base de données MongoDB.
-- **Fonctionnalités Clés**:
-    - Gestion des menus (nourriture/boissons)
-    - Système de réservations
-    - Génération de factures et devis en PDF
-    - Gestion multi-restaurants (Holding)
-    - Menu public accessible via QR code
-    - Système de permissions pour les utilisateurs
-- **Intégrations**: MongoDB uniquement.
-- **Code Source**: Fourni via un repository GitHub : 
+-   **Stack Technologique**: Frontend React Native/Expo (build web statique), Backend FastAPI (Python), Base de données MongoDB.
+-   **Fonctionnalités Clés**:
+    -   Gestion des menus (nourriture/boissons)
+    -   Système de réservations
+    -   Génération de factures et devis en PDF
+    -   Gestion multi-restaurants (Holding)
+    -   Menu public accessible via QR code
+    -   Système de permissions pour les utilisateurs
+-   **Intégrations**: MongoDB uniquement.
+-   **Code Source**: Fourni via un repository GitHub : 
 
 **User's preferred language**: Français. Vous devez répondre à l'utilisateur en français uniquement.
 
 **what currently exists?**
-Le projet a été cloné avec succès depuis GitHub. Le backend FastAPI et le frontend Expo (build web) ont été configurés et fonctionnent dans l'environnement de prévisualisation (preview). La base de données MongoDB de l'utilisateur a été restaurée à partir d'un backup, rendant l'application pleinement fonctionnelle en mode preview. Plusieurs bugs ont été corrigés, notamment le rafraîchissement des données lors du changement de restaurant et les couleurs incorrectes dans les PDF générés.
+Le projet est fonctionnel dans l'environnement de prévisualisation (preview). Le backend FastAPI sert une application web statique construite avec Expo for Web. La base de données MongoDB de l'utilisateur est connectée et contient les données. Récemment, l'agent a corrigé un problème d'espacement en haut de l'interface sur mobile en modifiant le code source React Native () et en effectuant un nouveau build de l'application. Une tentative de correction pour l'espacement en bas a également été incluse dans ce nouveau build. L'agent a ensuite commencé à investiguer un nouveau bug signalé par l'utilisateur concernant une page d'erreur Restaurant non trouvé.
 
 **Last working item**:
-- **Last item agent was working:** L'agent travaillait à la résolution d'un problème d'interface utilisateur sur mobile. L'utilisateur a signalé qu'il y a un espace blanc excessif en haut et en bas de l'application sur son iPhone, ce qui réduit l'espace d'affichage utile. L'agent tentait de supprimer ces marges/paddings.
-- **Status:** IN PROGRESS
-- **Agent Testing Done:** N
-- **Which testing method agent to use?** screenshot tool (pour vérifier les changements de l'interface utilisateur en vue mobile).
-- **User Testing Done:** N (L'utilisateur a confirmé que le problème persiste après la dernière tentative de l'agent).
+-   **Last item agent was working:** L'agent a commencé à déboguer un bug critique signalé par l'utilisateur : lorsqu'on accède à l'URL publique d'un menu client (ex: ), la page affiche une erreur Restaurant non trouvé. L'agent a vérifié que l'endpoint backend () et la base de données fonctionnent correctement, isolant le problème au code frontend.
+-   **Status:** IN PROGRESS
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** screenshot tool pour vérifier que la page du menu client se charge correctement après le correctif.
+-   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** Espace vertical excessif sur la vue mobile (P0)
+-   **Issue 1:** La page du menu client affiche Restaurant non trouvé (P0)
 -   **Issue 2:** Le déploiement en production ne fonctionne pas (P1)
--   **Issue 3:** La génération de PDF nécessite plusieurs clics sur mobile (P2)
+-   **Issue 3:** L'espace noir en bas de l'écran persiste sur les pages sans barre de navigation (P2)
+-   **Issue 4:** La génération de PDF nécessite plusieurs clics sur mobile (P3)
 
 **Issues Detail:**
--   **Issue 1:** Espace vertical excessif sur la vue mobile
-    -   **Attempted fixes:** L'agent a tenté de désactiver  pour le build web et a également essayé de forcer les paddings  à  via CSS dans le fichier  généré. Aucune de ces tentatives n'a entièrement résolu le problème.
+-   **Issue 1:** La page du menu client affiche Restaurant non trouvé
+    -   **Attempted fixes:** L'agent a vérifié que le restaurant existe dans la collection  de la base de données. Il a ensuite testé directement l'endpoint API  avec un  et a confirmé qu'il renvoyait bien les données du restaurant. Le problème ne vient donc ni de la base de données, ni de l'API backend.
     -   **Next debug checklist:**
-        1.  Inspecter le code source du template HTML dans  pour appliquer un correctif permanent avant la phase de build.
-        2.  Modifier les styles CSS des conteneurs principaux de l'application (ex: , , ) pour forcer une hauteur de  et supprimer tout  ou .
-        3.  Examiner les composants d'en-tête (header) et de pied de page (footer) dans le code source React pour identifier les styles qui ajoutent cet espace.
-    -   **Why fix this issue and what will be achieved with the fix?** Améliorer l'expérience utilisateur sur mobile en maximisant l'espace d'écran disponible pour le contenu de l'application.
+        1.  Examiner le code source frontend dans .
+        2.  Localiser la logique de routage qui gère la page .
+        3.  Vérifier comment l'ID du restaurant est extrait de l'URL et comment l'URL de l'API est construite et appelée dans le code JavaScript.
+    -   **Why fix this issue and what will be achieved with the fix?** C'est une fonctionnalité essentielle qui permet aux clients des restaurants de voir le menu. Sa résolution est bloquante pour l'utilisateur.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** Y
+    -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Frontend
     -   **Blocked on other issue:** Non
 
 -   **Issue 2:** Le déploiement en production ne fonctionne pas
-    -   **Attempted fixes:** De nombreuses stratégies ont été tentées sans succès : utilisation d'un serveur Express personnalisé, utilisation du paquet  avec différents répertoires de build (, , ), service de l'application via une route backend (). L'agent a utilisé l'agent de déploiement à plusieurs reprises, mais le problème persiste. La configuration actuelle () fonctionne en preview mais échoue lors du déploiement. La cause est probablement une incompatibilité entre le build Expo Web et le système de déploiement d'Emergent.
-    -   **Next debug checklist:**
-        1.  NE PAS répéter les stratégies de déploiement qui ont déjà échoué.
-        2.  L'utilisateur a relancé un déploiement. Vérifier le statut de cette dernière tentative.
-        3.  Si l'échec persiste, le problème doit être considéré comme une limitation de la plateforme. L'agent doit cesser de tenter de corriger le code et préparer un rapport technique détaillé pour l'équipe de support d'Emergent, expliquant le problème et les tentatives effectuées.
-    -   **Why fix this issue and what will be achieved with the fix?** C'est l'objectif principal de l'utilisateur : obtenir une URL de production stable et fonctionnelle.
+    -   **Attempted fixes:** De multiples stratégies ont échoué (serveur Express, paquet , etc.). Le problème est une incompatibilité récurrente entre le build Expo Web et la plateforme de déploiement d'Emergent.
+    -   **Next debug checklist:** Ne pas tenter de nouvelles stratégies de déploiement. Ce problème est bloqué et doit être considéré comme une limitation de la plateforme jusqu'à nouvel ordre. L'objectif est de continuer le développement sur l'URL de preview.
+    -   **Why fix this issue and what will be achieved with the fix?** C'est l'objectif final de l'utilisateur d'avoir une URL de production stable.
     -   **Status:** BLOCKED
     -   **Is recurring issue?** Y
     -   **Should Test frontend/backend/both after fix?** Both
-    -   **Blocked on other issue:** Non. C'est le principal point de blocage du projet.
+    -   **Blocked on other issue:** Non
 
--   **Issue 3:** La génération de PDF nécessite plusieurs clics sur mobile
-    -   **Attempted fixes:** Aucun. Le problème a été signalé par l'utilisateur, mais l'agent s'est concentré sur les autres problèmes prioritaires.
-    -   **Next debug checklist:**
-        1.  Identifier le composant bouton/lien dans  qui déclenche le téléchargement du PDF.
-        2.  Vérifier s'il y a des éléments superposés (z-index) ou des écouteurs d'événements qui pourraient interférer avec le premier clic.
-        3.  Considérer l'utilisation d'une technique de debounce ou d'un composant tactile différent pour contourner d'éventuels bugs liés à  sur le web mobile.
-    -   **Why fix this issue and what will be achieved with the fix?** Assurer une interaction utilisateur fluide et fiable pour une fonctionnalité essentielle de l'application.
+-   **Issue 3:** L'espace noir en bas de l'écran persiste sur les pages sans barre de navigation
+    -   **Attempted fixes:** L'agent a modifié le code source dans  pour ajouter un  conditionnel aux écrans qui n'ont pas de barre de navigation (ex: ). Un nouveau build a été généré et déployé en preview.
+    -   **Next debug checklist:** L'utilisateur a signalé le problème à nouveau après le dernier build. Il faut vérifier si les modifications de padding ont bien été appliquées ou si une autre approche CSS est nécessaire (ex: forcer le conteneur principal à s'étirer sur  de la hauteur).
+    -   **Why fix this issue and what will be achieved with the fix?** Améliorer l'UX en utilisant tout l'espace d'écran disponible, ce qui est un point important pour l'utilisateur.
+    -   **Status:** USER VERIFICATION PENDING
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Frontend
+    -   **Blocked on other issue:** Non
+
+-   **Issue 4:** La génération de PDF nécessite plusieurs clics sur mobile
+    -   **Attempted fixes:** Aucun.
+    -   **Next debug checklist:** Identifier le composant bouton, vérifier les interférences d'autres éléments (z-index) ou des problèmes liés à  sur le web mobile.
     -   **Status:** NOT STARTED
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Frontend
     -   **Blocked on other issue:** Non
 
 **In progress Task List**:
--   Aucune. Le travail actuel consiste à résoudre les problèmes listés ci-dessus.
+-   Aucune.
 
 **Upcoming and Future Tasks**
--   Aucune nouvelle tâche n'a été demandée. L'objectif est de finaliser la migration et le déploiement.
+Suite à la dernière demande de l'utilisateur (message #261), les tâches suivantes ont été ajoutées et sont maintenant prioritaires après la résolution du bug du menu client (Issue #1).
+
+**Upcoming Tasks:**
+-   **P1 - Ardoise - Prix modifiable :** Rendre le champ prix formule sur l'ardoise éditable et sauvegarder la modification.
+    -   Fichier à modifier: 
+-   **P1 - Ardoise - Suivi des ventes :** Ajouter des champs de saisie pour enregistrer les quantités vendues pour chaque plat de l'ardoise à la fin du service.
+    -   Fichiers à modifier:  (frontend),  (nouvel endpoint API et logique de sauvegarde).
+    -   Nécessitera probablement une nouvelle collection MongoDB (ex: ).
+-   **P2 - Ardoise - Rapports de ventes :** Créer une nouvelle section pour visualiser les rapports de ventes de l'ardoise (par jour/semaine) et les exporter en PDF ou Excel.
+    -   Fichiers à modifier:  (frontend),  (nouvel endpoint API pour l'agrégation des données).
+
+**Future Tasks:**
+-   Décomposer le fichier monolithique  en composants plus petits pour améliorer la maintenabilité.
 
 **Completed work in this session**
--   **Configuration du Projet**: Le projet a été cloné depuis GitHub et la structure des fichiers a été organisée dans  et . Les dépendances ont été installées.
--   **Restauration des Données**: La base de données MongoDB de l'utilisateur a été restaurée avec succès, rendant l'application fonctionnelle avec les données existantes.
--   **Correction de Bug (Rafraîchissement des données)**: Un bug qui empêchait le rafraîchissement des données lors du changement de restaurant a été corrigé en forçant un re-rendu des composants via une  unique et en s'assurant que toutes les données étaient rechargées.
--   **Correction de Bug (Couleurs PDF)**: Un bug où la génération de PDF utilisait une couleur bleue codée en dur a été corrigé. Le code backend () a été modifié pour utiliser la couleur dynamique définie pour chaque restaurant.
--   **Correction de Bug (Rafraîchissement sur mobile)**: Un problème de cache du service worker qui affectait le rafraîchissement sur mobile a été résolu.
+-   **Correction UI Mobile (Haut) :** L'espace noir excessif en haut de l'application a été supprimé avec succès. L'en-tête de l'application s'étend maintenant jusqu'au bord supérieur de l'écran sur iOS.
+-   **Tentative de Correction UI Mobile (Bas) :** Modification du code source () pour ajouter un  aux écrans sans barre de navigation.
+-   **Reconstruction du Frontend :** L'agent a effectué un build complet de l'application Expo (yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.) après avoir modifié le code source, puis a copié les nouveaux fichiers statiques et ré-appliqué les correctifs CSS manuels.
+-   **Diagnostic de Bug :** L'erreur Restaurant non trouvé a été diagnostiquée et isolée au code frontend, après avoir confirmé que le backend et la base de données fonctionnaient correctement.
 
 **Earlier issues found/mentioned but not fixed**
--   Le problème des clics multiples pour les PDF sur mobile a été mentionné mais n'a pas encore été traité (voir Issue 3 ci-dessus).
+-   Tous les problèmes connus sont listés dans la section .
 
 **Known issue recurrence from previous fork**
--   N/A
+-   Le problème de déploiement en production est un problème récurrent depuis le début du projet.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend**: React Native avec Expo (pour le Web), caractérisé par un composant unique de très grande taille () qui gère la majeure partie de la logique et de l'état de l'application.
--   **Backend**: FastAPI (Python), qui fournit une API JSON et est également configuré pour servir le build statique du frontend.
+-   **Frontend**: Expo for Web. Le code source est un unique fichier .
+-   **Backend**: FastAPI.
 -   **Database**: MongoDB.
--   **Déploiement**: Système de déploiement propriétaire d'Emergent (basé sur Kubernetes), qui est la source du principal problème non résolu. Le frontend est servi via l'outil .
+-   **Workflow de build**: Le développement frontend nécessite de modifier , de lancer yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. dans , de copier le résultat de  vers  et , puis d'appliquer manuellement des patchs CSS à  et de mettre à jour la version dans .
 
 **key DB schema**
 -   : {email, password, restaurant_id, ...}
 -   : {name, primary_color, secondary_color, ...}
 -   : {restaurant_id, name, ...}
 -   : {section_id, name, price, ...}
--   De nombreuses autres collections pour les réservations, les factures, les événements, etc.
+-    (à créer): {restaurant_id, date, item_id, quantity, ...}
 
 **changes in tech stack**
--   Le mécanisme de service du frontend a été changé d'un serveur Express personnalisé à l'outil standard  pour tenter d'améliorer la compatibilité avec l'environnement de déploiement.
+-   Aucun.
 
 **All files of reference**
--   : Modifié pour corriger les couleurs codées en dur dans la génération de PDF.
--   : Modifié pour corriger le bug de rafraîchissement des données.
--   : Modifié pour changer le script  et utiliser .
--   : Fichier généré, modifié à plusieurs reprises pour tenter de résoudre les problèmes de déploiement et de .
+-   : Fichier source principal du frontend. A été modifié pour les problèmes d'espacement.
+-   : Fichier HTML servi, patché manuellement pour le CSS.
+-   : Fichier source pour la copie vers .
+-   : Fichier service worker, patché pour forcer le rafraîchissement du cache.
+-   : API backend.
+-   : Contient les scripts  et .
 
 **Areas that need refactoring**:
--   Le fichier  est extrêmement volumineux (+21 000 lignes) et contient la quasi-totalité de l'application. Il devrait être décomposé en composants plus petits et en hooks personnalisés pour améliorer la maintenabilité.
+-   Le fichier  est ingérable et doit être décomposé.
+-   Le processus de build manuel et de patch est source d'erreurs et devrait être automatisé ou les correctifs devraient être intégrés directement dans le code source.
 
 **key api endpoints**
--   : Connexion utilisateur.
--   : Changer le restaurant actif de l'utilisateur.
--   : Obtenir les données de l'utilisateur courant.
--   : Générer le PDF du menu.
+-   
+-   
+-   
+-   
+-    (Endpoint pertinent pour le bug actuel)
 
 **Critical Info for New Agent**
--   **Le déploiement est le problème principal et bloquant.** L'application fonctionne parfaitement sur l'URL de preview, mais le déploiement sur l'URL de production échoue systématiquement. Le problème semble provenir d'une incompatibilité entre le build Expo Web et le système de déploiement d'Emergent. Ne perdez pas de temps à essayer des stratégies qui ont déjà échoué.
--   L'utilisateur est très frustré par les problèmes de déploiement et le manque de réponse du support. Faites preuve d'empathie mais soyez direct sur la nature du problème (probablement une limitation de la plateforme).
--   La base de code frontend est un fichier monolithique, ce qui rend le débogage complexe. Utilisez la recherche de texte pour naviguer.
+-   **Nouvelles Priorités :** L'utilisateur a défini une nouvelle série de tâches prioritaires concernant la fonctionnalité Ardoise (prix éditables, suivi des ventes, rapports). Celles-ci doivent être abordées juste après la résolution du bug Restaurant non trouvé.
+-   **Workflow Frontend :** Le workflow pour toute modification du frontend est complexe : modifier  -> yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. -> copier le build -> patcher manuellement  et . Suivez ce processus attentivement.
+-   **Bug du Menu Client :** Le bug Restaurant non trouvé est confirmé comme étant un problème frontend. Commencez l'investigation dans  pour voir comment la page client récupère les données.
+-   **Déploiement Bloqué :** Ne perdez pas de temps sur le déploiement en production. C'est un problème connu de la plateforme. Concentrez-vous sur le développement dans l'environnement de prévisualisation.
 
 **documents and test reports created in this job**
--   
+-   Aucun.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **Utilisateur :** Il y a encore trop d'espace en haut et en bas, peux-tu le supprimer au maximum ? (*Problème en cours*)
-2.  **Utilisateur :** L'espace s'est un peu amélioré, mais il en reste beaucoup. Peux-tu l'agrandir davantage ? (*Problème en cours*)
-3.  **Utilisateur :** L'application fonctionne, mais il y a de l'espace perdu, les PDF nécessitent plusieurs clics, et la couleur pour Le Parloir est toujours bleue. (*Couleur corrigée, autres problèmes en cours*)
-4.  **Utilisateur :** Il faut une solution permanente pour l'URL 24/7. J'ai dépensé de l'argent. (*Le déploiement est le bloqueur*)
-5.  **Utilisateur :** Le support ne répond pas. Nous devons trouver une solution ensemble. (*L'agent continue de chercher des solutions*)
-6.  **Utilisateur :** Je ne peux pas abandonner, tu m'as dit que ça fonctionnerait ici. Trouve une solution. (*L'agent continue de chercher des solutions*)
-7.  **Utilisateur :** La couleur PDF est toujours bleue. Comment obtenir l'URL définitive ? (*Couleur corrigée, déploiement en cours*)
-8.  **Utilisateur :** Le rafraîchissement ne marche pas sur mobile, les données n'ont pas toutes été copiées, et la couleur pour Le Parloir est fausse. (*Problèmes de rafraîchissement et de couleur corrigés*)
-9.  **Utilisateur :** Répète les problèmes de rafraîchissement sur mobile et de données/couleurs. (*Corrigé*)
-10. **Utilisateur :** Les données ne se rafraîchissent pas automatiquement. (*Corrigé*)
+10. **Utilisateur :** Le haut de l'app est bien corrigé.
+9.  **Utilisateur :** Demande de supprimer l'espace noir en bas sous les icônes de navigation.
+8.  **Utilisateur :** Confirme que l'espace noir en bas est toujours présent et moche sur l'écran Menu Restaurant.
+7.  **Utilisateur :** Approuve la suggestion de l'agent de modifier le code source (Option 2).
+6.  **Utilisateur :**  (S'interroge sur la durée du processus de build).
+5.  **Utilisateur :** Envoie une capture d'écran avec de nombreuses nouvelles demandes :
+    -   Rendre le prix des formules modifiable sur l'ardoise.
+    -   Supprimer l'espace en bas de l'écran.
+    -   Le lien du menu client affiche un message d'erreur.
+    -   Amélioration : Suivre les quantités vendues par jour pour l'ardoise.
+    -   Amélioration : Obtenir des rapports de ventes (PDF/Excel) pour l'ardoise.
+4.  **Utilisateur :** Fournit les URLs des menus clients qui ne fonctionnent pas.
+3.  **Utilisateur :** Confirme que l'espace en bas est toujours un problème.
+2.  **Utilisateur :** Approuve la suggestion de l'agent.
+1.  **Utilisateur :** Confirme que le haut de l'app est maintenant parfait.
 
 **Project Health Check:**
--   **Broken:** Le déploiement en production. L'application n'est pas accessible via l'URL .
+-   **Broken:**
+    -   Déploiement en production.
+    -   Lien public du menu client ().
 -   **Mocked:** Aucun.
 
 **3rd Party Integrations**
 -   MongoDB
 
 **Testing status**
--   **Testing agent used after significant changes:** YES
--   **Troubleshoot agent used after agent stuck in loop:** YES (deployment_agent)
+-   **Testing agent used after significant changes:** NO
+-   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** []
--   **Known regressions:** []
+-   **Known regressions:** La page du menu client qui fonctionnait précédemment est maintenant cassée.
 
 **Credentials to test flow:**
-Les comptes utilisateurs ont été restaurés. L'email  est disponible. Le mot de passe est connu de l'utilisateur. De nouveaux comptes peuvent être créés via le flux Créer un restaurant.
+-   Les comptes utilisateurs de la base de données restaurée sont disponibles. L'email  peut être utilisé. Le mot de passe est connu de l'utilisateur.
 
 **What agent forgot to execute**
-L'agent a pris note du problème des clics multiples sur PDF mais l'a reporté pour se concentrer sur d'autres problèmes. Ce bug n'a pas encore été traité.</analysis>
+-   L'agent a lancé un build  qui est une tâche longue sans en informer l'utilisateur, ce qui a conduit l'utilisateur à envoyer un  pour demander où en était le processus. La communication sur les tâches longues doit être améliorée.</analysis>
