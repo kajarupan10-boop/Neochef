@@ -11652,6 +11652,23 @@ async def get_ardoise_share_link(current_user: dict = Depends(get_current_user))
         "message": "Ce lien est permanent et ne change jamais. Partagez-le avec votre équipe."
     }
 
+@api_router.get("/app-page")
+async def serve_app_page_via_api():
+    """Serve the main application page via API route"""
+    from fastapi.responses import HTMLResponse
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        content = index_file.read_text()
+        return HTMLResponse(
+            content=content, 
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    raise HTTPException(status_code=404, detail="App not found")
+
 @api_router.get("/ardoise/page/{share_token}")
 async def get_ardoise_page(share_token: str):
     """Sert la page HTML de l'ardoise directement (bypass cache CDN)"""
@@ -14962,6 +14979,24 @@ async def detailed_health_check():
         health["status"] = "degraded"
     
     return health
+
+# Special route to serve homepage (bypass CDN cache)
+@app.get("/app")
+async def serve_app_homepage():
+    """Serve the main application homepage"""
+    from fastapi.responses import FileResponse
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(
+            str(index_file), 
+            media_type='text/html',
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    raise HTTPException(status_code=404, detail="App not found")
 
 # ==================== APP SETUP ====================
 
