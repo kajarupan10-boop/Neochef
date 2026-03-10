@@ -11663,7 +11663,7 @@ async def get_ardoise_page(share_token: str):
         raise HTTPException(status_code=404, detail="Ardoise non trouvée")
     
     # Read the HTML file
-    html_path = DIST_DIR / "ardoise" / "[token].html"
+    html_path = DIST_DIR / "gestion.html"
     if not html_path.exists():
         raise HTTPException(status_code=500, detail="Page non disponible")
     
@@ -11678,6 +11678,26 @@ async def get_ardoise_page(share_token: str):
             "Expires": "0",
             "Surrogate-Control": "no-store",
             "X-Accel-Expires": "0"
+        }
+    )
+
+@api_router.get("/gestion-ardoise")
+async def get_gestion_page():
+    """Page de gestion ardoise indépendante"""
+    from fastapi.responses import HTMLResponse
+    
+    html_path = DIST_DIR / "gestion.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=500, detail="Page non disponible")
+    
+    html_content = html_path.read_text()
+    
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
         }
     )
 
