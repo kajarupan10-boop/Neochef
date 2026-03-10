@@ -45,9 +45,9 @@ Le code frontend implémente :
 - **Token Ardoise O'Parloir** : `3A72iGUORT3Ymx6zsrPcBQ`
 
 ## URLs
-- **Preview** : https://restaurant-preview-6.preview.emergentagent.com
+- **Preview** : https://recipe-slate.preview.emergentagent.com
 - **Production** : https://neochef-pwa-2.emergent.host
-- **Ardoise O'Parloir** : https://restaurant-preview-6.preview.emergentagent.com/ardoise/3A72iGUORT3Ymx6zsrPcBQ
+- **Ardoise O'Parloir** : https://recipe-slate.preview.emergentagent.com/ardoise/3A72iGUORT3Ymx6zsrPcBQ
 
 ## Problèmes Connus
 
