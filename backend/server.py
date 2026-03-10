@@ -12084,6 +12084,93 @@ async def get_ardoise_sales_report_public(
         "daily_breakdown": sales
     }
 
+@api_router.get("/ardoise/sales/report/{restaurant_id}")
+async def get_ardoise_sales_report_by_restaurant(
+    restaurant_id: str,
+    period: str = "week",
+    current_user: dict = Depends(get_current_user)
+):
+    """Récupérer un rapport agrégé des ventes de l'ardoise par restaurant_id"""
+    # Verify user has access to this restaurant
+    if current_user["restaurant_id"] != restaurant_id and current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Accès non autorisé à ce restaurant")
+    
+    today = datetime.now(timezone.utc).date()
+    if period == "day":
+        start_date = today.isoformat()
+    elif period == "week":
+        start_date = (today - timedelta(days=7)).isoformat()
+    elif period == "year":
+        start_date = (today - timedelta(days=365)).isoformat()
+    else:  # month
+        start_date = (today - timedelta(days=30)).isoformat()
+    
+    sales = await ardoise_sales_collection.find(
+        {"restaurant_id": restaurant_id, "date": {"$gte": start_date}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+    
+    total_entrees = 0
+    total_plats = 0
+    total_desserts = 0
+    items_stats = {}
+    
+    for sale in sales:
+        for item in sale.get("entree", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_entrees += qty
+            name = item.get("name", "")
+            if name and qty > 0:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "entree"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("plat", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_plats += qty
+            name = item.get("name", "")
+            if name and qty > 0:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "plat"}
+                items_stats[name]["total_qty"] += qty
+        
+        for item in sale.get("dessert", []):
+            qty = item.get("quantity_sold", 0) or 0
+            total_desserts += qty
+            name = item.get("name", "")
+            if name and qty > 0:
+                if name not in items_stats:
+                    items_stats[name] = {"total_qty": 0, "category": "dessert"}
+                items_stats[name]["total_qty"] += qty
+    
+    top_items = sorted(
+        [{"name": k, **v} for k, v in items_stats.items()],
+        key=lambda x: x["total_qty"],
+        reverse=True
+    )[:10]
+    
+    return {
+        "period": period,
+        "start_date": start_date,
+        "end_date": today.isoformat(),
+        "total_services": len(sales),
+        "total_items": total_entrees + total_plats + total_desserts,
+        "total_by_category": {
+            "entree": total_entrees,
+            "plat": total_plats,
+            "dessert": total_desserts
+        },
+        "totals": {
+            "entrees": total_entrees,
+            "plats": total_plats,
+            "desserts": total_desserts,
+            "total": total_entrees + total_plats + total_desserts
+        },
+        "top_items": [{"name": item["name"], "total_sold": item["total_qty"], "category": item.get("category", "")} for item in top_items],
+        "daily_details": sales,
+        "daily_breakdown": sales
+    }
+
 @api_router.get("/ardoise/sales/export-pdf/{share_token}")
 async def export_ardoise_sales_pdf(
     share_token: str,
