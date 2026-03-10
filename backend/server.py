@@ -12067,13 +12067,20 @@ async def get_ardoise_sales_report_public(
         "start_date": start_date,
         "end_date": today.isoformat(),
         "total_services": len(sales),
+        "total_items": total_entrees + total_plats + total_desserts,
+        "total_by_category": {
+            "entree": total_entrees,
+            "plat": total_plats,
+            "dessert": total_desserts
+        },
         "totals": {
             "entrees": total_entrees,
             "plats": total_plats,
             "desserts": total_desserts,
             "total": total_entrees + total_plats + total_desserts
         },
-        "top_items": top_items,
+        "top_items": [{"name": item["name"], "total_sold": item["total_qty"], "category": item.get("category", "")} for item in top_items],
+        "daily_details": sales,
         "daily_breakdown": sales
     }
 
@@ -15093,12 +15100,12 @@ async def serve_spa(full_path: str):
             headers = {"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0", "Surrogate-Control": "no-store"}
             return FileResponse(str(ardoise_html), media_type='text/html', headers=headers)
     
-    # For ardoise pages, serve the [token].html template
+    # For ardoise pages, serve the gestion.html (nouvelle page de gestion complète)
     if full_path.startswith("ardoise/"):
-        ardoise_html = DIST_DIR / "ardoise" / "[token].html"
-        if ardoise_html.exists():
+        gestion_html = DIST_DIR / "gestion.html"
+        if gestion_html.exists():
             headers = {"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0", "Pragma": "no-cache", "Expires": "0", "Surrogate-Control": "no-store"}
-            return FileResponse(str(ardoise_html), media_type='text/html', headers=headers)
+            return FileResponse(str(gestion_html), media_type='text/html', headers=headers)
     
     # For client pages, serve the [restaurant_id].html template
     if full_path.startswith("client/"):
