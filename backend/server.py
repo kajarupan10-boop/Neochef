@@ -12679,6 +12679,9 @@ async def export_ardoise_sales_excel_by_restaurant(
     period: str = "week"
 ):
     """Exporter le rapport des ventes en Excel par restaurant_id"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    
     restaurant = await restaurants_collection.find_one(
         {"restaurant_id": restaurant_id},
         {"_id": 0, "name": 1}
@@ -12781,11 +12784,17 @@ async def export_ardoise_sales_excel_by_restaurant(
         ws2.cell(row=row, column=5, value=dessert_qty)
         ws2.cell(row=row, column=6, value=entree_qty + plat_qty + dessert_qty)
     
-    # Ajuster les largeurs de colonnes
+    # Ajuster les largeurs de colonnes (éviter les cellules fusionnées)
+    from openpyxl.utils import get_column_letter
     for ws_sheet in [ws, ws2]:
-        for column_cells in ws_sheet.columns:
-            length = max(len(str(cell.value or "")) for cell in column_cells)
-            ws_sheet.column_dimensions[column_cells[0].column_letter].width = min(length + 2, 50)
+        for col_idx in range(1, ws_sheet.max_column + 1):
+            max_length = 0
+            col_letter = get_column_letter(col_idx)
+            for row_idx in range(1, ws_sheet.max_row + 1):
+                cell = ws_sheet.cell(row=row_idx, column=col_idx)
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            ws_sheet.column_dimensions[col_letter].width = min(max_length + 2, 50)
     
     # Sauvegarder dans un buffer
     buffer = BytesIO()
