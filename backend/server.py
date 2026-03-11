@@ -11954,6 +11954,83 @@ async def save_ardoise_sales_by_restaurant(restaurant_id: str, sales: ArdoiseSal
         await ardoise_sales_collection.insert_one(sales_record)
         return {"message": "Ventes enregistrées avec succès"}
 
+@api_router.get("/ardoise/suggestions/{restaurant_id}")
+async def get_ardoise_suggestions(
+    restaurant_id: str,
+    query: str,
+    category: str  # "entree", "plat", "dessert"
+):
+    """
+    Auto-complétion intelligente basée sur l'historique des ventes.
+    Retourne les plats similaires avec leurs dates et quantités vendues.
+    """
+    if len(query) < 2:
+        return {"suggestions": []}
+    
+    # Rechercher dans l'historique des ventes
+    sales = await ardoise_sales_collection.find(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "date": 1, "service": 1, category: 1}
+    ).sort("date", -1).to_list(200)
+    
+    # Agréger les plats par nom
+    items_history = {}
+    query_lower = query.lower()
+    
+    for sale in sales:
+        date = sale.get("date", "")
+        service = sale.get("service", "")
+        items = sale.get(category, [])
+        
+        for item in items:
+            name = item.get("name", "")
+            qty = item.get("quantity_sold", 0) or 0
+            
+            if not name:
+                continue
+            
+            # Vérifier si le nom contient la requête (recherche flexible)
+            if query_lower in name.lower():
+                if name not in items_history:
+                    items_history[name] = {
+                        "name": name,
+                        "total_sold": 0,
+                        "dates": [],
+                        "last_date": None
+                    }
+                
+                items_history[name]["total_sold"] += qty
+                if date and date not in [d["date"] for d in items_history[name]["dates"]]:
+                    items_history[name]["dates"].append({
+                        "date": date,
+                        "service": service,
+                        "quantity": qty
+                    })
+                
+                if not items_history[name]["last_date"] or date > items_history[name]["last_date"]:
+                    items_history[name]["last_date"] = date
+    
+    # Trier par total vendu (décroissant) et limiter à 10 suggestions
+    suggestions = sorted(
+        items_history.values(),
+        key=lambda x: (x["total_sold"], x["last_date"] or ""),
+        reverse=True
+    )[:10]
+    
+    # Formater les dates pour l'affichage
+    for suggestion in suggestions:
+        suggestion["dates"] = sorted(suggestion["dates"], key=lambda x: x["date"], reverse=True)[:5]
+        # Formater la dernière date
+        if suggestion["last_date"]:
+            try:
+                from datetime import datetime as dt
+                d = dt.strptime(suggestion["last_date"], "%Y-%m-%d")
+                suggestion["last_date_formatted"] = d.strftime("%d/%m/%Y")
+            except:
+                suggestion["last_date_formatted"] = suggestion["last_date"]
+    
+    return {"suggestions": suggestions}
+
 @api_router.get("/ardoise/sales/by-date/{restaurant_id}")
 async def get_ardoise_sales_by_date(
     restaurant_id: str,
