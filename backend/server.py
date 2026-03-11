@@ -268,6 +268,7 @@ privatisation_spaces_collection = db.mep_privatisation_spaces
 # A L'ARDOISE Collection (Shareable Menu Board)
 ardoise_collection = db.mep_ardoise  # Menu "A l'Ardoise" avec lien partageable
 ardoise_sales_collection = db.mep_ardoise_sales  # Historique des ventes de l'ardoise
+ardoise_planned_collection = db.mep_ardoise_planned  # Ardoises planifiées par date
 
 # Translations Collection (for instant language switching)
 translations_collection = db.mep_translations  # Store pre-computed translations
@@ -12030,6 +12031,113 @@ async def get_ardoise_suggestions(
                 suggestion["last_date_formatted"] = suggestion["last_date"]
     
     return {"suggestions": suggestions}
+
+# ==================== ARDOISES PLANIFIÉES ====================
+
+class PlannedArdoiseRequest(BaseModel):
+    """Requête pour sauvegarder une ardoise planifiée"""
+    date: str  # Format YYYY-MM-DD
+    entree: List[dict] = []
+    plat: List[dict] = []
+    dessert: List[dict] = []
+    formule_prices: Optional[dict] = None
+
+@api_router.get("/ardoise/planned/{restaurant_id}")
+async def get_planned_ardoise(restaurant_id: str, date: str):
+    """Récupérer l'ardoise planifiée pour une date donnée"""
+    planned = await ardoise_planned_collection.find_one(
+        {"restaurant_id": restaurant_id, "date": date},
+        {"_id": 0}
+    )
+    
+    if not planned:
+        # Retourner l'ardoise actuelle si pas de planification
+        current = await ardoise_collection.find_one(
+            {"restaurant_id": restaurant_id},
+            {"_id": 0}
+        )
+        if current:
+            return {
+                "found": False,
+                "is_current": True,
+                "entree": current.get("entree", []),
+                "plat": current.get("plat", []),
+                "dessert": current.get("dessert", []),
+                "formule_prices": current.get("formule_prices", {})
+            }
+        return {"found": False, "is_current": False, "entree": [], "plat": [], "dessert": [], "formule_prices": {}}
+    
+    return {
+        "found": True,
+        "is_current": False,
+        "date": planned.get("date"),
+        "entree": planned.get("entree", []),
+        "plat": planned.get("plat", []),
+        "dessert": planned.get("dessert", []),
+        "formule_prices": planned.get("formule_prices", {})
+    }
+
+@api_router.post("/ardoise/planned/{restaurant_id}")
+async def save_planned_ardoise(restaurant_id: str, request: PlannedArdoiseRequest):
+    """Sauvegarder une ardoise planifiée pour une date future"""
+    today = datetime.now(timezone.utc).date().isoformat()
+    
+    planned_data = {
+        "restaurant_id": restaurant_id,
+        "date": request.date,
+        "entree": request.entree,
+        "plat": request.plat,
+        "dessert": request.dessert,
+        "formule_prices": request.formule_prices or {},
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Upsert - mise à jour ou création
+    result = await ardoise_planned_collection.update_one(
+        {"restaurant_id": restaurant_id, "date": request.date},
+        {"$set": planned_data},
+        upsert=True
+    )
+    
+    # Si c'est pour aujourd'hui, mettre aussi à jour l'ardoise principale
+    if request.date == today:
+        await ardoise_collection.update_one(
+            {"restaurant_id": restaurant_id},
+            {"$set": {
+                "entree": request.entree,
+                "plat": request.plat,
+                "dessert": request.dessert,
+                "formule_prices": request.formule_prices or {},
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    
+    return {"message": "Ardoise planifiée sauvegardée", "date": request.date}
+
+@api_router.get("/ardoise/planned/list/{restaurant_id}")
+async def list_planned_ardoises(restaurant_id: str):
+    """Lister toutes les ardoises planifiées pour les 14 prochains jours"""
+    today = datetime.now(timezone.utc).date()
+    dates_with_planning = []
+    
+    # Récupérer les planifications existantes
+    planned = await ardoise_planned_collection.find(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "date": 1}
+    ).to_list(30)
+    
+    planned_dates = [p["date"] for p in planned]
+    
+    # Créer la liste des 14 prochains jours avec indicateur de planification
+    for i in range(14):
+        d = (today + timedelta(days=i)).isoformat()
+        dates_with_planning.append({
+            "date": d,
+            "has_planning": d in planned_dates,
+            "is_today": i == 0
+        })
+    
+    return {"dates": dates_with_planning}
 
 @api_router.get("/ardoise/sales/by-date/{restaurant_id}")
 async def get_ardoise_sales_by_date(
