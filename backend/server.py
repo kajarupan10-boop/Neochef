@@ -2807,6 +2807,184 @@ async def delete_prestataire(
     
     return {"message": "Prestataire deleted successfully"}
 
+# ==================== SUPER ADMIN ENDPOINTS ====================
+
+class CreateRestaurantRequest(BaseModel):
+    name: str
+    admin_email: str
+    admin_password: str
+    admin_name: str
+    description: Optional[str] = None
+    primary_color: str = "#26252D"
+    secondary_color: str = "#F5F0E8"
+
+@api_router.get("/superadmin/restaurants")
+async def superadmin_list_restaurants(current_user: dict = Depends(get_current_user)):
+    """Liste tous les restaurants (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    restaurants = await restaurants_collection.find({}, {"_id": 0}).to_list(500)
+    
+    # Pour chaque restaurant, compter les utilisateurs
+    for r in restaurants:
+        user_count = await users_collection.count_documents({"restaurant_id": r["restaurant_id"]})
+        r["user_count"] = user_count
+        
+        # Dernière connexion
+        last_session = await sessions_collection.find_one(
+            {"restaurant_id": r["restaurant_id"]},
+            sort=[("created_at", -1)]
+        )
+        r["last_activity"] = last_session["created_at"].isoformat() if last_session and "created_at" in last_session else None
+    
+    return restaurants
+
+@api_router.post("/superadmin/restaurants")
+async def superadmin_create_restaurant(
+    request: CreateRestaurantRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Créer un nouveau restaurant avec son admin (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    # Vérifier si l'email existe déjà
+    existing_user = await users_collection.find_one({"email": request.admin_email.lower()})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    
+    # Créer le restaurant
+    restaurant_id = f"rest_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    restaurant = {
+        "restaurant_id": restaurant_id,
+        "name": request.name,
+        "description": request.description,
+        "logo_base64": None,
+        "primary_color": request.primary_color,
+        "secondary_color": request.secondary_color,
+        "created_at": now
+    }
+    await restaurants_collection.insert_one(restaurant)
+    
+    # Créer l'utilisateur admin
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    password_hash = hashlib.sha256(request.admin_password.encode()).hexdigest()
+    
+    admin_user = {
+        "user_id": user_id,
+        "restaurant_id": restaurant_id,
+        "email": request.admin_email.lower(),
+        "password_hash": password_hash,
+        "name": request.admin_name,
+        "role": "admin",
+        "assigned_categories": [],
+        "notification_prefs": {"push": True, "email": False, "sms": False},
+        "created_at": now
+    }
+    await users_collection.insert_one(admin_user)
+    
+    return {
+        "restaurant_id": restaurant_id,
+        "name": request.name,
+        "admin_email": request.admin_email.lower(),
+        "admin_name": request.admin_name,
+        "created_at": now.isoformat()
+    }
+
+@api_router.get("/superadmin/users")
+async def superadmin_list_all_users(
+    restaurant_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Liste tous les utilisateurs (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    query = {}
+    if restaurant_id:
+        query["restaurant_id"] = restaurant_id
+    
+    users = await users_collection.find(query, {"_id": 0, "password_hash": 0}).to_list(1000)
+    
+    # Ajouter le nom du restaurant pour chaque utilisateur
+    for u in users:
+        if u.get("restaurant_id"):
+            restaurant = await restaurants_collection.find_one(
+                {"restaurant_id": u["restaurant_id"]},
+                {"name": 1, "_id": 0}
+            )
+            u["restaurant_name"] = restaurant["name"] if restaurant else "Inconnu"
+    
+    return users
+
+@api_router.put("/superadmin/users/{user_id}/reset-password")
+async def superadmin_reset_user_password(
+    user_id: str,
+    request: ResetPasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Réinitialiser le mot de passe d'un utilisateur (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    password_hash = hashlib.sha256(request.new_password.encode()).hexdigest()
+    
+    result = await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"password_hash": password_hash, "updated_at": datetime.now(timezone.utc)}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    return {"message": "Mot de passe réinitialisé avec succès"}
+
+@api_router.delete("/superadmin/restaurants/{restaurant_id}")
+async def superadmin_delete_restaurant(
+    restaurant_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Supprimer un restaurant et tous ses utilisateurs (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    # Supprimer tous les utilisateurs du restaurant
+    await users_collection.delete_many({"restaurant_id": restaurant_id})
+    
+    # Supprimer le restaurant
+    result = await restaurants_collection.delete_one({"restaurant_id": restaurant_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Restaurant non trouvé")
+    
+    return {"message": "Restaurant et utilisateurs supprimés avec succès"}
+
+@api_router.get("/superadmin/stats")
+async def superadmin_get_stats(current_user: dict = Depends(get_current_user)):
+    """Obtenir les statistiques globales (Super Admin uniquement)"""
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    total_restaurants = await restaurants_collection.count_documents({})
+    total_users = await users_collection.count_documents({})
+    total_events = await db.mep_events.count_documents({})
+    
+    # Connexions des dernières 24h
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    recent_sessions = await sessions_collection.count_documents({
+        "created_at": {"$gte": yesterday}
+    })
+    
+    return {
+        "total_restaurants": total_restaurants,
+        "total_users": total_users,
+        "total_events": total_events,
+        "sessions_last_24h": recent_sessions
+    }
+
 # ==================== CATEGORY ENDPOINTS ====================
 
 @api_router.post("/categories/create")
