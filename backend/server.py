@@ -12667,57 +12667,73 @@ async def export_ardoise_sales_pdf_by_restaurant(
     pdf.cell(0, 6, f"Total plats vendus: {total_qty}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(10)
     
-    # Détail par plat
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Detail par plat", new_x="LMARGIN", new_y="NEXT")
     
-    # En-têtes du tableau
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_fill_color(255, 209, 102)
-    pdf.cell(100, 8, "Plat", border=1, fill=True)
-    pdf.cell(40, 8, "Categorie", border=1, fill=True)
-    pdf.cell(40, 8, "Quantite", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("Helvetica", "", 9)
-    sorted_items = sorted(items_stats.items(), key=lambda x: x[1]["total_qty"], reverse=True)
-    
-    for name, data in sorted_items:
-        clean_name = clean_text(name)
-        display_name = clean_name[:35] + "..." if len(clean_name) > 35 else clean_name
-        cat_label = {"entree": "Entree", "plat": "Plat", "dessert": "Dessert"}.get(data["category"], data["category"])
-        pdf.cell(100, 7, display_name, border=1)
-        pdf.cell(40, 7, cat_label, border=1)
-        pdf.cell(40, 7, str(data["total_qty"]), border=1, new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.ln(10)
-    
-    # Détail par jour
+    # Détail par jour - Format détaillé avec nom de chaque plat
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Detail par jour", new_x="LMARGIN", new_y="NEXT")
     
-    # En-têtes
-    pdf.set_font("Helvetica", "B", 10)
+    # En-têtes du tableau détaillé
+    pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(255, 209, 102)
-    pdf.cell(35, 8, "Date", border=1, fill=True)
-    pdf.cell(30, 8, "Service", border=1, fill=True)
-    pdf.cell(30, 8, "Entrees", border=1, fill=True)
-    pdf.cell(30, 8, "Plats", border=1, fill=True)
-    pdf.cell(30, 8, "Desserts", border=1, fill=True)
-    pdf.cell(30, 8, "Total", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(25, 8, "Date", border=1, fill=True)
+    pdf.cell(55, 8, "Entree", border=1, fill=True)
+    pdf.cell(12, 8, "Qte", border=1, fill=True)
+    pdf.cell(55, 8, "Plat", border=1, fill=True)
+    pdf.cell(12, 8, "Qte", border=1, fill=True)
+    pdf.cell(55, 8, "Dessert", border=1, fill=True)
+    pdf.cell(12, 8, "Qte", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
     
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("Helvetica", "", 7)
+    
     for sale in sales:
-        entree_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("entree", []))
-        plat_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("plat", []))
-        dessert_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("dessert", []))
+        date_str = sale.get("date", "")
+        service = sale.get("service", "").capitalize()
         
-        pdf.cell(35, 7, sale.get("date", ""), border=1)
-        pdf.cell(30, 7, sale.get("service", "").capitalize(), border=1)
-        pdf.cell(30, 7, str(entree_qty), border=1, align="C")
-        pdf.cell(30, 7, str(plat_qty), border=1, align="C")
-        pdf.cell(30, 7, str(dessert_qty), border=1, align="C")
-        pdf.cell(30, 7, str(entree_qty + plat_qty + dessert_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
-    
+        # Filtrer les items avec quantité > 0
+        entrees = [e for e in sale.get("entree", []) if (e.get("quantity_sold") or 0) > 0]
+        plats = [p for p in sale.get("plat", []) if (p.get("quantity_sold") or 0) > 0]
+        desserts = [d for d in sale.get("dessert", []) if (d.get("quantity_sold") or 0) > 0]
+        
+        # Nombre max de lignes pour ce jour
+        max_rows = max(len(entrees), len(plats), len(desserts), 1)
+        
+        for row_idx in range(max_rows):
+            # Date seulement sur la première ligne
+            if row_idx == 0:
+                pdf.cell(25, 6, f"{date_str[:10]}", border=1)
+            else:
+                pdf.cell(25, 6, "", border=1)
+            
+            # Entrée
+            if row_idx < len(entrees):
+                e_name = clean_text(entrees[row_idx].get("name", ""))[:20]
+                e_qty = entrees[row_idx].get("quantity_sold", 0)
+                pdf.cell(55, 6, e_name, border=1)
+                pdf.cell(12, 6, str(e_qty), border=1, align="C")
+            else:
+                pdf.cell(55, 6, "", border=1)
+                pdf.cell(12, 6, "", border=1)
+            
+            # Plat
+            if row_idx < len(plats):
+                p_name = clean_text(plats[row_idx].get("name", ""))[:20]
+                p_qty = plats[row_idx].get("quantity_sold", 0)
+                pdf.cell(55, 6, p_name, border=1)
+                pdf.cell(12, 6, str(p_qty), border=1, align="C")
+            else:
+                pdf.cell(55, 6, "", border=1)
+                pdf.cell(12, 6, "", border=1)
+            
+            # Dessert
+            if row_idx < len(desserts):
+                d_name = clean_text(desserts[row_idx].get("name", ""))[:20]
+                d_qty = desserts[row_idx].get("quantity_sold", 0)
+                pdf.cell(55, 6, d_name, border=1)
+                pdf.cell(12, 6, str(d_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(55, 6, "", border=1)
+                pdf.cell(12, 6, "", border=1, new_x="LMARGIN", new_y="NEXT")
+
     # Générer le buffer
     buffer = BytesIO(pdf.output())
     
