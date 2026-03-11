@@ -237,6 +237,9 @@ invoice_counters_collection = db.mep_invoice_counters
 # Invoices and Quotes Collection (Factures et Devis)
 invoices_collection = db.mep_invoices  # Factures et Devis
 
+# Prestataires Collection (Service Providers for Events)
+prestataires_collection = db.mep_prestataires
+
 # Préparation de Commande Collections (Order Preparation)
 suppliers_collection = db.mep_suppliers
 supplier_products_collection = db.mep_supplier_products
@@ -2679,6 +2682,130 @@ async def get_user_permissions(
         "name": target_user.get("name"),
         "permissions": permissions
     }
+
+# ==================== PRESTATAIRES ENDPOINTS ====================
+
+class CreatePrestataireRequest(BaseModel):
+    nom_societe: str
+    contact: Optional[str] = None
+    telephone: Optional[str] = None
+    email: Optional[str] = None
+    note: Optional[str] = None
+    tarifs: Optional[str] = None
+
+class UpdatePrestataireRequest(BaseModel):
+    nom_societe: Optional[str] = None
+    contact: Optional[str] = None
+    telephone: Optional[str] = None
+    email: Optional[str] = None
+    note: Optional[str] = None
+    tarifs: Optional[str] = None
+
+@api_router.get("/prestataires/list")
+async def list_prestataires(current_user: dict = Depends(get_current_user)):
+    """Liste tous les prestataires du restaurant"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    prestataires = await prestataires_collection.find(
+        {"restaurant_id": current_user["restaurant_id"]},
+        {"_id": 0}
+    ).sort("nom_societe", 1).to_list(500)
+    
+    return prestataires
+
+@api_router.post("/prestataires")
+async def create_prestataire(
+    request: CreatePrestataireRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Créer un nouveau prestataire"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    prestataire_id = f"prest_{uuid.uuid4().hex[:12]}"
+    now = datetime.now(timezone.utc)
+    
+    prestataire = {
+        "prestataire_id": prestataire_id,
+        "restaurant_id": current_user["restaurant_id"],
+        "nom_societe": request.nom_societe,
+        "contact": request.contact,
+        "telephone": request.telephone,
+        "email": request.email,
+        "note": request.note,
+        "tarifs": request.tarifs,
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await prestataires_collection.insert_one(prestataire)
+    
+    return {
+        "prestataire_id": prestataire_id,
+        "restaurant_id": current_user["restaurant_id"],
+        "nom_societe": request.nom_societe,
+        "contact": request.contact,
+        "telephone": request.telephone,
+        "email": request.email,
+        "note": request.note,
+        "tarifs": request.tarifs,
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat()
+    }
+
+@api_router.put("/prestataires/{prestataire_id}")
+async def update_prestataire(
+    prestataire_id: str,
+    request: UpdatePrestataireRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mettre à jour un prestataire"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc)}
+    
+    if request.nom_societe is not None:
+        update_data["nom_societe"] = request.nom_societe
+    if request.contact is not None:
+        update_data["contact"] = request.contact
+    if request.telephone is not None:
+        update_data["telephone"] = request.telephone
+    if request.email is not None:
+        update_data["email"] = request.email
+    if request.note is not None:
+        update_data["note"] = request.note
+    if request.tarifs is not None:
+        update_data["tarifs"] = request.tarifs
+    
+    result = await prestataires_collection.update_one(
+        {"prestataire_id": prestataire_id, "restaurant_id": current_user["restaurant_id"]},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Prestataire not found")
+    
+    return {"message": "Prestataire updated successfully"}
+
+@api_router.delete("/prestataires/{prestataire_id}")
+async def delete_prestataire(
+    prestataire_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Supprimer un prestataire"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await prestataires_collection.delete_one(
+        {"prestataire_id": prestataire_id, "restaurant_id": current_user["restaurant_id"]}
+    )
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Prestataire not found")
+    
+    return {"message": "Prestataire deleted successfully"}
 
 # ==================== CATEGORY ENDPOINTS ====================
 
