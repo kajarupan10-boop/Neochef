@@ -11561,6 +11561,30 @@ async def create_menu_restaurant_draft_section(request: Request, current_user: d
         "name": data.get("name", ""),
         "menu_type": data.get("menu_type", "food"),
         "parent_id": data.get("parent_id"),
+        "parent_section_id": data.get("parent_section_id"),
+        "has_happy_hour": data.get("has_happy_hour", False),
+        "order": data.get("order", 999),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await menu_restaurant_draft_sections_collection.insert_one(section)
+    return {"section_id": section_id, "message": "Section créée"}
+
+@api_router.post("/menu-restaurant-draft/sections/create")
+async def create_menu_restaurant_draft_section_alt(request: Request, current_user: dict = Depends(get_current_user)):
+    """Créer une section dans le brouillon (endpoint alternatif)"""
+    restaurant_id = current_user["restaurant_id"]
+    data = await request.json()
+    
+    section_id = str(uuid.uuid4())
+    section = {
+        "section_id": section_id,
+        "restaurant_id": restaurant_id,
+        "name": data.get("name", ""),
+        "menu_type": data.get("menu_type", "food"),
+        "parent_id": data.get("parent_id"),
+        "parent_section_id": data.get("parent_section_id"),
+        "has_happy_hour": data.get("has_happy_hour", False),
         "order": data.get("order", 999),
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -11581,8 +11605,43 @@ async def create_menu_restaurant_draft_item(request: Request, current_user: dict
         "section_id": data.get("section_id"),
         "name": data.get("name", ""),
         "description": data.get("description", ""),
-        "descriptions": [data.get("description", "")] if data.get("description") else [],
+        "descriptions": data.get("descriptions", []),
         "price": data.get("price", 0),
+        "happy_hour_price": data.get("happy_hour_price"),
+        "tva_rate": data.get("tva_rate", 10),
+        "formats": data.get("formats", []),
+        "suggestions": data.get("suggestions", []),
+        "allergens": data.get("allergens", []),
+        "source_fiche_id": data.get("source_fiche_id"),
+        "menu_type": data.get("menu_type", "food"),
+        "order": data.get("order", 999),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await menu_restaurant_draft_items_collection.insert_one(item)
+    return {"item_id": item_id, "message": "Item créé"}
+
+@api_router.post("/menu-restaurant-draft/items/create")
+async def create_menu_restaurant_draft_item_alt(request: Request, current_user: dict = Depends(get_current_user)):
+    """Créer un item dans le brouillon (endpoint alternatif)"""
+    restaurant_id = current_user["restaurant_id"]
+    data = await request.json()
+    
+    item_id = str(uuid.uuid4())
+    item = {
+        "item_id": item_id,
+        "restaurant_id": restaurant_id,
+        "section_id": data.get("section_id"),
+        "name": data.get("name", ""),
+        "description": data.get("description", ""),
+        "descriptions": data.get("descriptions", []),
+        "price": data.get("price", 0),
+        "happy_hour_price": data.get("happy_hour_price"),
+        "tva_rate": data.get("tva_rate", 10),
+        "formats": data.get("formats", []),
+        "suggestions": data.get("suggestions", []),
+        "allergens": data.get("allergens", []),
+        "source_fiche_id": data.get("source_fiche_id"),
         "menu_type": data.get("menu_type", "food"),
         "order": data.get("order", 999),
         "is_active": True,
