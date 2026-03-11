@@ -11954,6 +11954,27 @@ async def save_ardoise_sales_by_restaurant(restaurant_id: str, sales: ArdoiseSal
         await ardoise_sales_collection.insert_one(sales_record)
         return {"message": "Ventes enregistrées avec succès"}
 
+@api_router.get("/ardoise/sales/by-date/{restaurant_id}")
+async def get_ardoise_sales_by_date(
+    restaurant_id: str,
+    date: str,
+    service: Optional[str] = None
+):
+    """Récupérer les ventes d'une date spécifique (endpoint public pour l'app principale)"""
+    query = {"restaurant_id": restaurant_id, "date": date}
+    if service:
+        query["service"] = service
+    
+    sales = await ardoise_sales_collection.find(
+        query,
+        {"_id": 0}
+    ).to_list(10)
+    
+    if not sales:
+        return {"found": False, "sales": []}
+    
+    return {"found": True, "sales": sales}
+
 @api_router.get("/ardoise/sales")
 async def get_ardoise_sales(
     start_date: Optional[str] = None,
