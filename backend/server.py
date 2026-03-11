@@ -401,9 +401,30 @@ class FacturationPermissions(BaseModel):
     devis_deposer: bool = False
     devis_telecharger: bool = False
 
+class ArdoiseEditionPermissions(BaseModel):
+    """Permissions pour l'édition de l'ardoise (onglet Édition)"""
+    acces: bool = False
+    mode: str = "lecture"  # "lecture" ou "modifier"
+
+class ArdoiseVentesPermissions(BaseModel):
+    """Permissions pour les ventes de l'ardoise (onglet Ventes)"""
+    acces: bool = False
+    mode: str = "lecture"  # "lecture" ou "modifier"
+
+class ArdoiseRapportsPermissions(BaseModel):
+    """Permissions pour les rapports de l'ardoise (onglet Rapports)"""
+    acces: bool = False
+    mode: str = "lecture"  # "lecture" ou "modifier"
+    export_pdf: bool = False
+    export_excel: bool = False
+
 class ArdoisePermissions(BaseModel):
-    """Permissions pour Ardoise"""
+    """Permissions pour Ardoise - structure granulaire"""
     actif: bool = False
+    edition: ArdoiseEditionPermissions = ArdoiseEditionPermissions()
+    ventes: ArdoiseVentesPermissions = ArdoiseVentesPermissions()
+    rapports: ArdoiseRapportsPermissions = ArdoiseRapportsPermissions()
+    # Anciens champs conservés pour compatibilité
     menu: bool = False
     pdf: bool = False
     section: ActionPermissions = ActionPermissions()

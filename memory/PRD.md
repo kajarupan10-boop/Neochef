@@ -1,84 +1,89 @@
-# NeoChef - Product Requirements Document
+# NeoChef PWA - Product Requirements Document
 
 ## Original Problem Statement
-Application PWA pour la gestion de restaurants avec :
-- Gestion des menus (nourriture/boissons)
+Migration d'une application PWA existante nommée "NeoChef" pour la gestion de restaurants. L'objectif principal est d'obtenir une URL de production stable et permanente.
+
+## Stack Technologique
+- Frontend: React Native/Expo (build web statique)
+- Backend: FastAPI (Python)
+- Base de données: MongoDB
+
+## Core Features
+
+### 1. Gestion de base
+- Gestion des menus
 - Système de réservations
-- Génération de factures et devis en PDF
+- Génération de factures PDF
 - Gestion multi-restaurants (Holding)
-- Menu public accessible via QR code
-- Système de permissions pour les utilisateurs
-- Fonctionnalités "Ardoise" (plats du jour)
+- Menu public via QR code
 
-## Stack Technique
-- **Frontend**: React Native/Expo (build web statique)
-- **Backend**: FastAPI (Python)
-- **Base de données**: MongoDB
-- **Déploiement**: Emergent Platform
+### 2. Module Ardoise (A L'ARDOISE)
+- Édition des plats du jour
+- Suivi des quantités vendues par jour
+- Rapports de ventes (PDF/Excel)
+- Calendrier pour saisir/modifier les ventes des jours passés
+- Suggestions IA basées sur l'historique
+- Planification des ardoises des jours à venir
+- Export du planning des ardoises futures
 
-## Fonctionnalités Ardoise (IMPLÉMENTÉES)
+### 3. Système de Permissions (Nouveau - Mars 2026)
+Permissions granulaires pour le module Ardoise :
+- **Édition** : Accès oui/non + mode lecture seule ou modifier
+- **Ventes** : Accès oui/non + mode lecture seule ou modifier
+- **Rapports** : Accès oui/non + mode lecture seule ou modifier + Export PDF/Excel
 
-### Backend ✅ FONCTIONNEL
-Tous les endpoints API sont implémentés et testés :
+## What's Been Implemented
 
-1. **GET /api/ardoise/public/{token}** - Récupérer l'ardoise
-2. **PUT /api/ardoise/public/{token}** - Modifier l'ardoise (plats + prix formules)
-3. **POST /api/ardoise/public/{token}/sales** - Enregistrer les ventes du service
-4. **GET /api/ardoise/sales/report/public/{token}?period=week** - Rapport de ventes
-5. **GET /api/ardoise/sales/export-pdf/{token}?period=week** - Export PDF
-6. **GET /api/ardoise/sales/export-excel/{token}?period=week** - Export Excel
+### Session Mars 2026
+- [x] Nouveau système de permissions Ardoise avec 3 sections (Édition, Ventes, Rapports)
+- [x] Mode lecture seule vs modifier pour chaque section
+- [x] Export PDF/Excel conditionné aux permissions
+- [x] Espacement réduit sur l'écran "Rapport Ardoise"
+- [x] Backend mis à jour avec nouveaux modèles de permissions
+- [x] Synchronisation build frontend corrigée
 
-### Frontend (Code prêt, bloqué par cache CDN)
-Le code frontend implémente :
-- Mode Édition : modifier les plats et descriptions
-- Mode Ventes : saisir les quantités vendues par plat
-- Mode Rapports : visualiser les statistiques et exporter PDF/Excel
-- Édition des prix des formules
+### Sessions précédentes
+- [x] Visibilité de l'ardoise sur le menu client
+- [x] Interface de planification d'ardoise avec calendrier
+- [x] Interface de suggestion de plats avec historique
+- [x] Calendrier dans l'onglet des ventes
+- [x] Correction des bugs PDF (apostrophes, format paysage)
+- [x] Correction des problèmes de connexion utilisateur
 
-## Traductions
-7 langues générées : EN, ES, DE, IT, ZH, RU, PT
-31 traductions par langue pour les sections et plats de l'ardoise
+## Prioritized Backlog
 
-## Restaurants de Test
-- **O'Parloir** (rest_17e485265f52) - Restaurant principal
-- **Le Cercle** (rest_efb3705687ef)
-- **Token Ardoise O'Parloir** : `3A72iGUORT3Ymx6zsrPcBQ`
+### P0 (Critique)
+- [ ] Déployer en production les nouvelles fonctionnalités
 
-## URLs
-- **Preview** : https://recipe-slate.preview.emergentagent.com
-- **Production** : https://neochef-pwa-2.emergent.host
-- **Ardoise O'Parloir** : https://recipe-slate.preview.emergentagent.com/ardoise/3A72iGUORT3Ymx6zsrPcBQ
+### P1 (Important)
+- [ ] Téléchargement PDF sur mobile iOS (implémenter navigator.share)
+- [ ] Vérifier l'export du planning des ardoises
 
-## Problèmes Connus
+### P2 (Normal)
+- [ ] Vérifier les traductions sur le menu client public
 
-### ⚠️ Cache CDN (BLOQUANT)
-Le cache Cloudflare au niveau de la plateforme Emergent empêche les mises à jour frontend de s'afficher. Solutions :
-1. Redéployer via le bouton "Deploy"
-2. Contacter support@emergent.sh pour purger le cache
-3. Attendre l'expiration naturelle du cache
+### P3 (Nice to have)
+- [ ] Refactoriser index.tsx (~5000 lignes) en composants
+- [ ] Automatiser le build/déploiement
 
-### Issues en attente
-1. **Espace noir en bas de l'écran** - Non reproduit dans les tests
-2. **Visibilité ardoise sur menu client** - Section activée, restriction d'heure supprimée
-
-## Fichiers Clés
-- `/app/backend/server.py` - Backend FastAPI (15k+ lignes)
-- `/app/temp_clone/frontend/app/ardoise/[token].tsx` - Page gestion ardoise
+## Key Files
+- `/app/backend/server.py` - Backend FastAPI monolithique
+- `/app/temp_clone/frontend/app/index.tsx` - Frontend React monolithique
 - `/app/temp_clone/frontend/app/client/[restaurant_id].tsx` - Menu client public
 
-## Changelog
+## Database Schema
+- `mep_restaurants`: { _id, name, share_token }
+- `ardoise_items`: { restaurant_id, name, category }
+- `ardoise_formula_prices`: { restaurant_id, name, price }
+- `ardoise_sales_history`: { restaurant_id, date, service, sales }
+- `planned_ardoises`: { restaurant_id, date, entrees, plats, desserts }
+- `translations`: { key, lang, value }
 
-### 2026-03-09
-- Activé la section A L'ARDOISE pour O'Parloir
-- Ajouté données de test pour l'ardoise (2 entrées, 2 plats, 2 desserts)
-- Généré traductions pour 7 langues
-- Supprimé restriction d'heure (ardoise visible toute la journée)
-- Corrigé bug qui cachait section sans items réguliers
-- Testé toutes les APIs backend (PUT prix, POST ventes, GET rapports, exports)
-- Tenté plusieurs méthodes pour bypass cache CDN (sans succès)
+## Test Credentials
+- Email: groupenaga@gmail.com
+- Restaurant: Le Cercle
+- Password: LeCercle123!
 
-## Backlog / Future Tasks
-1. Corriger l'espace noir en bas de l'écran
-2. Déployer en production avec corrections
-3. Décomposer le fichier monolithique index.tsx
-4. Automatiser le processus de build
+## URLs
+- Preview: https://neochef-ardoise.preview.emergentagent.com
+- Production: https://neochef-pwa-2.emergent.host (ancien, à mettre à jour)
