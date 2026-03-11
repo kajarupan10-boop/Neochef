@@ -12139,6 +12139,201 @@ async def list_planned_ardoises(restaurant_id: str):
     
     return {"dates": dates_with_planning}
 
+@api_router.get("/ardoise/planned/export-pdf/{restaurant_id}")
+async def export_planned_ardoise_pdf(restaurant_id: str, days: int = 7):
+    """Exporter les ardoises planifiées pour les X prochains jours en PDF"""
+    
+    # Fonction pour nettoyer les caractères
+    def clean_text(text):
+        if not text:
+            return ""
+        replacements = {"'": "'", "'": "'", """: '"', """: '"', "–": "-", "—": "-", "…": "..."}
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return ''.join(c if ord(c) < 128 else '' for c in text)
+    
+    # Récupérer le nom du restaurant
+    restaurant = await restaurants_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "name": 1}
+    )
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant non trouvé")
+    restaurant_name = clean_text(restaurant.get("name", "Restaurant"))
+    
+    today = datetime.now(timezone.utc).date()
+    end_date = (today + timedelta(days=days)).isoformat()
+    
+    # Récupérer les ardoises planifiées
+    planned = await ardoise_planned_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": today.isoformat(), "$lte": end_date}
+        },
+        {"_id": 0}
+    ).sort("date", 1).to_list(days)
+    
+    # Si pas de planification, récupérer l'ardoise actuelle
+    if not planned:
+        current = await ardoise_collection.find_one({"restaurant_id": restaurant_id}, {"_id": 0})
+        if current:
+            planned = [{"date": today.isoformat(), "entree": current.get("entree", []), "plat": current.get("plat", []), "dessert": current.get("dessert", [])}]
+    
+    # Générer le PDF en paysage
+    class PlanningPDF(FPDF):
+        def header(self):
+            self.set_font("Helvetica", "B", 14)
+            self.cell(0, 8, f"{restaurant_name} - Planning Ardoise", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "", 9)
+            self.cell(0, 5, f"Du {today.strftime('%d/%m/%Y')} au {(today + timedelta(days=days-1)).strftime('%d/%m/%Y')}", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.ln(3)
+        
+        def footer(self):
+            self.set_y(-10)
+            self.set_font("Helvetica", "I", 7)
+            self.cell(0, 10, f"Genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')} - NeoChef", align="C")
+    
+    pdf = PlanningPDF(orientation='L')
+    pdf.add_page()
+    
+    # En-têtes
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_fill_color(255, 209, 102)
+    pdf.cell(25, 7, "Date", border=1, fill=True)
+    pdf.cell(75, 7, "Entrees", border=1, fill=True)
+    pdf.cell(75, 7, "Plats", border=1, fill=True)
+    pdf.cell(75, 7, "Desserts", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.set_font("Helvetica", "", 7)
+    
+    # Remplir avec les jours (même sans planification)
+    for i in range(days):
+        d = (today + timedelta(days=i)).isoformat()
+        day_data = next((p for p in planned if p.get("date") == d), None)
+        
+        # Date formatée
+        date_obj = today + timedelta(days=i)
+        date_str = date_obj.strftime("%a %d/%m")
+        
+        entrees = day_data.get("entree", []) if day_data else []
+        plats = day_data.get("plat", []) if day_data else []
+        desserts = day_data.get("dessert", []) if day_data else []
+        
+        # Filtrer les vides
+        entrees = [e for e in entrees if e.get("name")]
+        plats = [p for p in plats if p.get("name")]
+        desserts = [d for d in desserts if d.get("name")]
+        
+        max_rows = max(len(entrees), len(plats), len(desserts), 1)
+        
+        for row_idx in range(max_rows):
+            if row_idx == 0:
+                pdf.cell(25, 5, date_str, border=1)
+            else:
+                pdf.cell(25, 5, "", border=1)
+            
+            # Entrées
+            e_text = clean_text(entrees[row_idx].get("name", ""))[:40] if row_idx < len(entrees) else ""
+            pdf.cell(75, 5, e_text, border=1)
+            
+            # Plats
+            p_text = clean_text(plats[row_idx].get("name", ""))[:40] if row_idx < len(plats) else ""
+            pdf.cell(75, 5, p_text, border=1)
+            
+            # Desserts
+            d_text = clean_text(desserts[row_idx].get("name", ""))[:40] if row_idx < len(desserts) else ""
+            pdf.cell(75, 5, d_text, border=1, new_x="LMARGIN", new_y="NEXT")
+    
+    buffer = BytesIO(pdf.output())
+    filename = f"planning_ardoise_{today.isoformat()}.pdf"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/ardoise/planned/export-excel/{restaurant_id}")
+async def export_planned_ardoise_excel(restaurant_id: str, days: int = 7):
+    """Exporter les ardoises planifiées pour les X prochains jours en Excel"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    
+    restaurant = await restaurants_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0, "name": 1}
+    )
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant non trouvé")
+    restaurant_name = restaurant.get("name", "Restaurant")
+    
+    today = datetime.now(timezone.utc).date()
+    end_date = (today + timedelta(days=days)).isoformat()
+    
+    planned = await ardoise_planned_collection.find(
+        {
+            "restaurant_id": restaurant_id,
+            "date": {"$gte": today.isoformat(), "$lte": end_date}
+        },
+        {"_id": 0}
+    ).sort("date", 1).to_list(days)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Planning Ardoise"
+    
+    header_fill = PatternFill(start_color="FFD166", end_color="FFD166", fill_type="solid")
+    header_font = Font(bold=True)
+    
+    ws["A1"] = f"{restaurant_name} - Planning Ardoise"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"Du {today.strftime('%d/%m/%Y')} au {(today + timedelta(days=days-1)).strftime('%d/%m/%Y')}"
+    
+    headers = ["Date", "Entrées", "Plats", "Desserts"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+    
+    current_row = 5
+    for i in range(days):
+        d = (today + timedelta(days=i)).isoformat()
+        day_data = next((p for p in planned if p.get("date") == d), None)
+        
+        date_obj = today + timedelta(days=i)
+        date_str = date_obj.strftime("%a %d/%m/%Y")
+        
+        entrees = [e.get("name", "") for e in (day_data.get("entree", []) if day_data else []) if e.get("name")]
+        plats = [p.get("name", "") for p in (day_data.get("plat", []) if day_data else []) if p.get("name")]
+        desserts = [d.get("name", "") for d in (day_data.get("dessert", []) if day_data else []) if d.get("name")]
+        
+        max_rows = max(len(entrees), len(plats), len(desserts), 1)
+        
+        for row_idx in range(max_rows):
+            if row_idx == 0:
+                ws.cell(row=current_row, column=1, value=date_str)
+            ws.cell(row=current_row, column=2, value=entrees[row_idx] if row_idx < len(entrees) else "")
+            ws.cell(row=current_row, column=3, value=plats[row_idx] if row_idx < len(plats) else "")
+            ws.cell(row=current_row, column=4, value=desserts[row_idx] if row_idx < len(desserts) else "")
+            current_row += 1
+    
+    column_widths = [15, 40, 40, 40]
+    for col_idx, width in enumerate(column_widths, 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+    
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"planning_ardoise_{today.isoformat()}.xlsx"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 @api_router.get("/ardoise/sales/by-date/{restaurant_id}")
 async def get_ardoise_sales_by_date(
     restaurant_id: str,
