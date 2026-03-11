@@ -12047,6 +12047,23 @@ async def get_planned_ardoise(restaurant_id: str, date: str):
     """Récupérer l'ardoise planifiée pour une date donnée"""
     today = datetime.now(timezone.utc).date().isoformat()
     
+    # Toujours récupérer les prix de l'ardoise principale
+    current = await ardoise_collection.find_one(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0}
+    )
+    default_prices = current.get("formule_prices", {
+        "plat_du_jour": 15.90,
+        "entree_plat": 18.90,
+        "plat_dessert": 18.90,
+        "entree_plat_dessert": 23.90
+    }) if current else {
+        "plat_du_jour": 15.90,
+        "entree_plat": 18.90,
+        "plat_dessert": 18.90,
+        "entree_plat_dessert": 23.90
+    }
+    
     planned = await ardoise_planned_collection.find_one(
         {"restaurant_id": restaurant_id, "date": date},
         {"_id": 0}
@@ -12055,10 +12072,6 @@ async def get_planned_ardoise(restaurant_id: str, date: str):
     if not planned:
         # Si c'est aujourd'hui et pas de planification, retourner l'ardoise actuelle
         if date == today:
-            current = await ardoise_collection.find_one(
-                {"restaurant_id": restaurant_id},
-                {"_id": 0}
-            )
             if current:
                 return {
                     "found": False,
@@ -12066,17 +12079,17 @@ async def get_planned_ardoise(restaurant_id: str, date: str):
                     "entree": current.get("entree", []),
                     "plat": current.get("plat", []),
                     "dessert": current.get("dessert", []),
-                    "formule_prices": current.get("formule_prices", {})
+                    "formule_prices": default_prices
                 }
         
-        # Pour les jours futurs sans planification, retourner VIDE
+        # Pour les jours futurs sans planification, retourner VIDE mais AVEC les prix
         return {
             "found": False,
             "is_current": False,
             "entree": [],
             "plat": [],
             "dessert": [],
-            "formule_prices": {}
+            "formule_prices": default_prices  # Toujours inclure les prix
         }
     
     return {
@@ -12086,7 +12099,7 @@ async def get_planned_ardoise(restaurant_id: str, date: str):
         "entree": planned.get("entree", []),
         "plat": planned.get("plat", []),
         "dessert": planned.get("dessert", []),
-        "formule_prices": planned.get("formule_prices", {})
+        "formule_prices": planned.get("formule_prices") or default_prices  # Utiliser les prix par défaut si vide
     }
 
 @api_router.post("/ardoise/planned/{restaurant_id}")
