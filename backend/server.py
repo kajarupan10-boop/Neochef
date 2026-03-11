@@ -12635,59 +12635,38 @@ async def export_ardoise_sales_pdf_by_restaurant(
                         items_stats[name] = {"total_qty": 0, "category": section}
                     items_stats[name]["total_qty"] += qty
     
-    # Générer le PDF avec FPDF
+    # Générer le PDF avec FPDF - FORMAT PAYSAGE
     class ArdoisePDF(FPDF):
         def header(self):
-            self.set_font("Helvetica", "B", 18)
-            self.cell(0, 10, restaurant_name, align="C", new_x="LMARGIN", new_y="NEXT")
-            self.set_font("Helvetica", "B", 14)
-            self.cell(0, 8, "Rapport des Ventes - Ardoise", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "B", 16)
+            self.cell(0, 8, restaurant_name, align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "", 10)
+            self.cell(0, 6, f"Du {start_date} au {today.isoformat()}", align="C", new_x="LMARGIN", new_y="NEXT")
             self.ln(5)
         
         def footer(self):
-            self.set_y(-15)
-            self.set_font("Helvetica", "I", 8)
+            self.set_y(-10)
+            self.set_font("Helvetica", "I", 7)
             self.cell(0, 10, f"Genere le {datetime.now().strftime('%d/%m/%Y a %H:%M')} - NeoChef", align="C")
     
-    pdf = ArdoisePDF()
+    pdf = ArdoisePDF(orientation='L')  # L = Landscape (Paysage)
     pdf.add_page()
     
-    # Période
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(0, 8, f"Periode: {period_label}", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"Du {start_date} au {today.isoformat()}", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(10)
-    
-    # Statistiques globales
-    total_qty = sum(item["total_qty"] for item in items_stats.values())
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Resume", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 6, f"Nombre de services: {len(sales)}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"Total plats vendus: {total_qty}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(10)
-    
-    
-    # Détail par jour - Format détaillé avec nom de chaque plat
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Detail par jour", new_x="LMARGIN", new_y="NEXT")
-    
-    # En-têtes du tableau détaillé
-    pdf.set_font("Helvetica", "B", 8)
+    # En-têtes du tableau - colonnes plus larges en paysage
+    pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(255, 209, 102)
     pdf.cell(25, 8, "Date", border=1, fill=True)
-    pdf.cell(55, 8, "Entree", border=1, fill=True)
-    pdf.cell(12, 8, "Qte", border=1, fill=True)
-    pdf.cell(55, 8, "Plat", border=1, fill=True)
-    pdf.cell(12, 8, "Qte", border=1, fill=True)
-    pdf.cell(55, 8, "Dessert", border=1, fill=True)
-    pdf.cell(12, 8, "Qte", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(75, 8, "Entree", border=1, fill=True)
+    pdf.cell(15, 8, "Qte", border=1, fill=True)
+    pdf.cell(75, 8, "Plat", border=1, fill=True)
+    pdf.cell(15, 8, "Qte", border=1, fill=True)
+    pdf.cell(75, 8, "Dessert", border=1, fill=True)
+    pdf.cell(15, 8, "Qte", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
     
-    pdf.set_font("Helvetica", "", 7)
+    pdf.set_font("Helvetica", "", 8)
     
     for sale in sales:
         date_str = sale.get("date", "")
-        service = sale.get("service", "").capitalize()
         
         # Filtrer les items avec quantité > 0
         entrees = [e for e in sale.get("entree", []) if (e.get("quantity_sold") or 0) > 0]
@@ -12704,35 +12683,35 @@ async def export_ardoise_sales_pdf_by_restaurant(
             else:
                 pdf.cell(25, 6, "", border=1)
             
-            # Entrée
+            # Entrée - nom complet (jusqu'à 40 caractères)
             if row_idx < len(entrees):
-                e_name = clean_text(entrees[row_idx].get("name", ""))[:20]
+                e_name = clean_text(entrees[row_idx].get("name", ""))[:40]
                 e_qty = entrees[row_idx].get("quantity_sold", 0)
-                pdf.cell(55, 6, e_name, border=1)
-                pdf.cell(12, 6, str(e_qty), border=1, align="C")
+                pdf.cell(75, 6, e_name, border=1)
+                pdf.cell(15, 6, str(e_qty), border=1, align="C")
             else:
-                pdf.cell(55, 6, "", border=1)
-                pdf.cell(12, 6, "", border=1)
+                pdf.cell(75, 6, "", border=1)
+                pdf.cell(15, 6, "", border=1)
             
-            # Plat
+            # Plat - nom complet (jusqu'à 40 caractères)
             if row_idx < len(plats):
-                p_name = clean_text(plats[row_idx].get("name", ""))[:20]
+                p_name = clean_text(plats[row_idx].get("name", ""))[:40]
                 p_qty = plats[row_idx].get("quantity_sold", 0)
-                pdf.cell(55, 6, p_name, border=1)
-                pdf.cell(12, 6, str(p_qty), border=1, align="C")
+                pdf.cell(75, 6, p_name, border=1)
+                pdf.cell(15, 6, str(p_qty), border=1, align="C")
             else:
-                pdf.cell(55, 6, "", border=1)
-                pdf.cell(12, 6, "", border=1)
+                pdf.cell(75, 6, "", border=1)
+                pdf.cell(15, 6, "", border=1)
             
-            # Dessert
+            # Dessert - nom complet (jusqu'à 40 caractères)
             if row_idx < len(desserts):
-                d_name = clean_text(desserts[row_idx].get("name", ""))[:20]
+                d_name = clean_text(desserts[row_idx].get("name", ""))[:40]
                 d_qty = desserts[row_idx].get("quantity_sold", 0)
-                pdf.cell(55, 6, d_name, border=1)
-                pdf.cell(12, 6, str(d_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(75, 6, d_name, border=1)
+                pdf.cell(15, 6, str(d_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
             else:
-                pdf.cell(55, 6, "", border=1)
-                pdf.cell(12, 6, "", border=1, new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(75, 6, "", border=1)
+                pdf.cell(15, 6, "", border=1, new_x="LMARGIN", new_y="NEXT")
 
     # Générer le buffer
     buffer = BytesIO(pdf.output())
@@ -12750,9 +12729,10 @@ async def export_ardoise_sales_excel_by_restaurant(
     restaurant_id: str,
     period: str = "week"
 ):
-    """Exporter le rapport des ventes en Excel par restaurant_id"""
+    """Exporter le rapport des ventes en Excel par restaurant_id - Format détaillé jour par jour"""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
     
     restaurant = await restaurants_collection.find_one(
         {"restaurant_id": restaurant_id},
@@ -12765,13 +12745,10 @@ async def export_ardoise_sales_excel_by_restaurant(
     today = datetime.now(timezone.utc).date()
     if period == "day":
         start_date = today.isoformat()
-        period_label = "Aujourd'hui"
     elif period == "week":
         start_date = (today - timedelta(days=7)).isoformat()
-        period_label = "7 derniers jours"
     else:
         start_date = (today - timedelta(days=30)).isoformat()
-        period_label = "30 derniers jours"
     
     sales = await ardoise_sales_collection.find(
         {
@@ -12784,89 +12761,65 @@ async def export_ardoise_sales_excel_by_restaurant(
     # Créer le workbook Excel
     wb = Workbook()
     ws = wb.active
-    ws.title = "Rapport Ventes"
+    ws.title = "Detail par jour"
     
     # Style pour les en-têtes
     header_fill = PatternFill(start_color="FFD166", end_color="FFD166", fill_type="solid")
     header_font = Font(bold=True)
     
-    # Titre
-    ws.merge_cells("A1:F1")
-    ws["A1"] = f"{restaurant_name} - Rapport des Ventes Ardoise"
+    # Titre simple
+    ws["A1"] = f"{restaurant_name}"
     ws["A1"].font = Font(bold=True, size=14)
-    
-    ws["A2"] = f"Période: {period_label} ({start_date} au {today.isoformat()})"
+    ws["A2"] = f"Du {start_date} au {today.isoformat()}"
     ws["A2"].font = Font(italic=True)
     
-    # Résumé
-    ws["A4"] = "Résumé"
-    ws["A4"].font = Font(bold=True, size=12)
-    ws["A5"] = f"Nombre de services: {len(sales)}"
-    
-    # Agréger les données
-    items_stats = {}
-    for sale in sales:
-        for section in ["entree", "plat", "dessert"]:
-            for item in sale.get(section, []):
-                qty = item.get("quantity_sold", 0) or 0
-                name = item.get("name", "")
-                if name:
-                    if name not in items_stats:
-                        items_stats[name] = {"total_qty": 0, "category": section}
-                    items_stats[name]["total_qty"] += qty
-    
-    total_qty = sum(item["total_qty"] for item in items_stats.values())
-    ws["A6"] = f"Total plats vendus: {total_qty}"
-    
-    # Détail par plat
-    ws["A8"] = "Détail par plat"
-    ws["A8"].font = Font(bold=True, size=12)
-    
-    headers = ["Plat", "Catégorie", "Quantité vendue"]
+    # En-têtes du tableau - Ligne 4
+    headers = ["Date", "Entree", "Qte", "Plat", "Qte", "Dessert", "Qte"]
     for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=9, column=col, value=header)
+        cell = ws.cell(row=4, column=col, value=header)
         cell.fill = header_fill
         cell.font = header_font
     
-    sorted_items = sorted(items_stats.items(), key=lambda x: x[1]["total_qty"], reverse=True)
-    for row, (name, data) in enumerate(sorted_items, 10):
-        ws.cell(row=row, column=1, value=name)
-        cat_label = {"entree": "Entrée", "plat": "Plat", "dessert": "Dessert"}.get(data["category"], data["category"])
-        ws.cell(row=row, column=2, value=cat_label)
-        ws.cell(row=row, column=3, value=data["total_qty"])
+    # Données - commencer à la ligne 5
+    current_row = 5
     
-    # Détail par jour (nouvelle feuille)
-    ws2 = wb.create_sheet("Détail par jour")
-    
-    day_headers = ["Date", "Service", "Entrées", "Plats", "Desserts", "Total"]
-    for col, header in enumerate(day_headers, 1):
-        cell = ws2.cell(row=1, column=col, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-    
-    for row, sale in enumerate(sales, 2):
-        entree_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("entree", []))
-        plat_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("plat", []))
-        dessert_qty = sum(item.get("quantity_sold", 0) or 0 for item in sale.get("dessert", []))
+    for sale in sales:
+        date_str = sale.get("date", "")
         
-        ws2.cell(row=row, column=1, value=sale.get("date", ""))
-        ws2.cell(row=row, column=2, value=sale.get("service", "").capitalize())
-        ws2.cell(row=row, column=3, value=entree_qty)
-        ws2.cell(row=row, column=4, value=plat_qty)
-        ws2.cell(row=row, column=5, value=dessert_qty)
-        ws2.cell(row=row, column=6, value=entree_qty + plat_qty + dessert_qty)
+        # Filtrer les items avec quantité > 0
+        entrees = [e for e in sale.get("entree", []) if (e.get("quantity_sold") or 0) > 0]
+        plats = [p for p in sale.get("plat", []) if (p.get("quantity_sold") or 0) > 0]
+        desserts = [d for d in sale.get("dessert", []) if (d.get("quantity_sold") or 0) > 0]
+        
+        # Nombre max de lignes pour ce jour
+        max_rows = max(len(entrees), len(plats), len(desserts), 1)
+        
+        for row_idx in range(max_rows):
+            # Date seulement sur la première ligne
+            if row_idx == 0:
+                ws.cell(row=current_row, column=1, value=date_str)
+            
+            # Entrée
+            if row_idx < len(entrees):
+                ws.cell(row=current_row, column=2, value=entrees[row_idx].get("name", ""))
+                ws.cell(row=current_row, column=3, value=entrees[row_idx].get("quantity_sold", 0))
+            
+            # Plat
+            if row_idx < len(plats):
+                ws.cell(row=current_row, column=4, value=plats[row_idx].get("name", ""))
+                ws.cell(row=current_row, column=5, value=plats[row_idx].get("quantity_sold", 0))
+            
+            # Dessert
+            if row_idx < len(desserts):
+                ws.cell(row=current_row, column=6, value=desserts[row_idx].get("name", ""))
+                ws.cell(row=current_row, column=7, value=desserts[row_idx].get("quantity_sold", 0))
+            
+            current_row += 1
     
-    # Ajuster les largeurs de colonnes (éviter les cellules fusionnées)
-    from openpyxl.utils import get_column_letter
-    for ws_sheet in [ws, ws2]:
-        for col_idx in range(1, ws_sheet.max_column + 1):
-            max_length = 0
-            col_letter = get_column_letter(col_idx)
-            for row_idx in range(1, ws_sheet.max_row + 1):
-                cell = ws_sheet.cell(row=row_idx, column=col_idx)
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            ws_sheet.column_dimensions[col_letter].width = min(max_length + 2, 50)
+    # Ajuster les largeurs de colonnes
+    column_widths = [12, 35, 6, 35, 6, 35, 6]  # Date, Entree, Qte, Plat, Qte, Dessert, Qte
+    for col_idx, width in enumerate(column_widths, 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
     
     # Sauvegarder dans un buffer
     buffer = BytesIO()
