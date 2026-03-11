@@ -12652,18 +12652,18 @@ async def export_ardoise_sales_pdf_by_restaurant(
     pdf = ArdoisePDF(orientation='L')  # L = Landscape (Paysage)
     pdf.add_page()
     
-    # En-têtes du tableau - colonnes plus larges en paysage
-    pdf.set_font("Helvetica", "B", 9)
+    # En-têtes du tableau - colonnes ajustées pour A4 paysage (largeur 277mm avec marges 10mm)
+    pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(255, 209, 102)
-    pdf.cell(25, 8, "Date", border=1, fill=True)
-    pdf.cell(75, 8, "Entree", border=1, fill=True)
-    pdf.cell(15, 8, "Qte", border=1, fill=True)
-    pdf.cell(75, 8, "Plat", border=1, fill=True)
-    pdf.cell(15, 8, "Qte", border=1, fill=True)
-    pdf.cell(75, 8, "Dessert", border=1, fill=True)
-    pdf.cell(15, 8, "Qte", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(22, 7, "Date", border=1, fill=True)
+    pdf.cell(62, 7, "Entree", border=1, fill=True)
+    pdf.cell(12, 7, "Qte", border=1, fill=True)
+    pdf.cell(62, 7, "Plat", border=1, fill=True)
+    pdf.cell(12, 7, "Qte", border=1, fill=True)
+    pdf.cell(62, 7, "Dessert", border=1, fill=True)
+    pdf.cell(12, 7, "Qte", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
     
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font("Helvetica", "", 7)
     
     for sale in sales:
         date_str = sale.get("date", "")
@@ -12679,39 +12679,39 @@ async def export_ardoise_sales_pdf_by_restaurant(
         for row_idx in range(max_rows):
             # Date seulement sur la première ligne
             if row_idx == 0:
-                pdf.cell(25, 6, f"{date_str[:10]}", border=1)
+                pdf.cell(22, 5, f"{date_str[:10]}", border=1)
             else:
-                pdf.cell(25, 6, "", border=1)
+                pdf.cell(22, 5, "", border=1)
             
-            # Entrée - nom complet (jusqu'à 40 caractères)
+            # Entrée - nom complet (jusqu'à 35 caractères)
             if row_idx < len(entrees):
-                e_name = clean_text(entrees[row_idx].get("name", ""))[:40]
+                e_name = clean_text(entrees[row_idx].get("name", ""))[:35]
                 e_qty = entrees[row_idx].get("quantity_sold", 0)
-                pdf.cell(75, 6, e_name, border=1)
-                pdf.cell(15, 6, str(e_qty), border=1, align="C")
+                pdf.cell(62, 5, e_name, border=1)
+                pdf.cell(12, 5, str(e_qty), border=1, align="C")
             else:
-                pdf.cell(75, 6, "", border=1)
-                pdf.cell(15, 6, "", border=1)
+                pdf.cell(62, 5, "", border=1)
+                pdf.cell(12, 5, "", border=1)
             
-            # Plat - nom complet (jusqu'à 40 caractères)
+            # Plat - nom complet (jusqu'à 35 caractères)
             if row_idx < len(plats):
-                p_name = clean_text(plats[row_idx].get("name", ""))[:40]
+                p_name = clean_text(plats[row_idx].get("name", ""))[:35]
                 p_qty = plats[row_idx].get("quantity_sold", 0)
-                pdf.cell(75, 6, p_name, border=1)
-                pdf.cell(15, 6, str(p_qty), border=1, align="C")
+                pdf.cell(62, 5, p_name, border=1)
+                pdf.cell(12, 5, str(p_qty), border=1, align="C")
             else:
-                pdf.cell(75, 6, "", border=1)
-                pdf.cell(15, 6, "", border=1)
+                pdf.cell(62, 5, "", border=1)
+                pdf.cell(12, 5, "", border=1)
             
-            # Dessert - nom complet (jusqu'à 40 caractères)
+            # Dessert - nom complet (jusqu'à 35 caractères)
             if row_idx < len(desserts):
-                d_name = clean_text(desserts[row_idx].get("name", ""))[:40]
+                d_name = clean_text(desserts[row_idx].get("name", ""))[:35]
                 d_qty = desserts[row_idx].get("quantity_sold", 0)
-                pdf.cell(75, 6, d_name, border=1)
-                pdf.cell(15, 6, str(d_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(62, 5, d_name, border=1)
+                pdf.cell(12, 5, str(d_qty), border=1, align="C", new_x="LMARGIN", new_y="NEXT")
             else:
-                pdf.cell(75, 6, "", border=1)
-                pdf.cell(15, 6, "", border=1, new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(62, 5, "", border=1)
+                pdf.cell(12, 5, "", border=1, new_x="LMARGIN", new_y="NEXT")
 
     # Générer le buffer
     buffer = BytesIO(pdf.output())
