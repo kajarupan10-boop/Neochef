@@ -16416,6 +16416,39 @@ async def start_keep_alive_task():
     _keep_alive_task = asyncio.create_task(keep_preview_alive())
     logging.info("[KEEP-ALIVE] Background task started - app will stay awake")
 
+@app.on_event("startup")
+async def create_superadmin_if_not_exists():
+    """Create Super Admin account if it doesn't exist"""
+    try:
+        superadmin_email = "neochef.fr@gmail.com"
+        existing = await users_collection.find_one({"email": superadmin_email})
+        
+        if not existing:
+            import secrets
+            # Create password hash with salt (format: salt$hash)
+            password = "Kajan1012"
+            salt = secrets.token_hex(16)
+            password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+            full_hash = f"{salt}${password_hash}"
+            
+            superadmin = {
+                "user_id": f"user_{uuid.uuid4().hex[:12]}",
+                "restaurant_id": None,
+                "email": superadmin_email,
+                "password_hash": full_hash,
+                "name": "Super Admin",
+                "role": "superadmin",
+                "assigned_categories": [],
+                "notification_prefs": {"push": True, "email": False, "sms": False},
+                "created_at": datetime.now(timezone.utc)
+            }
+            await users_collection.insert_one(superadmin)
+            logging.info(f"[STARTUP] Super Admin account created: {superadmin_email}")
+        else:
+            logging.info(f"[STARTUP] Super Admin account already exists: {superadmin_email}")
+    except Exception as e:
+        logging.error(f"[STARTUP] Error creating Super Admin: {e}")
+
 @app.on_event("shutdown")
 async def stop_keep_alive_task():
     """Stop the keep-alive task on shutdown"""
