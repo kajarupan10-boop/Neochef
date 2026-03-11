@@ -12561,6 +12561,40 @@ async def export_ardoise_sales_pdf_by_restaurant(
     period: str = "week"
 ):
     """Exporter le rapport des ventes en PDF par restaurant_id"""
+    
+    # Fonction pour nettoyer les caractères Unicode non supportés
+    def clean_text(text):
+        if not text:
+            return ""
+        # Remplacer les apostrophes typographiques et autres caractères spéciaux
+        replacements = {
+            "'": "'",  # Apostrophe typographique -> apostrophe simple
+            "'": "'",  # Autre apostrophe typographique
+            """: '"',  # Guillemet typographique
+            """: '"',  # Guillemet typographique
+            "–": "-",  # Tiret long
+            "—": "-",  # Tiret très long
+            "…": "...",  # Points de suspension
+            "œ": "oe",  # Ligature
+            "Œ": "OE",  # Ligature majuscule
+            "é": "e",  # Accent (si problème)
+            "è": "e",
+            "ê": "e",
+            "ë": "e",
+            "à": "a",
+            "â": "a",
+            "ù": "u",
+            "û": "u",
+            "ô": "o",
+            "î": "i",
+            "ï": "i",
+            "ç": "c",
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        # Supprimer tout caractère non-ASCII restant
+        return ''.join(c if ord(c) < 128 else '' for c in text)
+    
     # Récupérer le nom du restaurant
     restaurant = await restaurants_collection.find_one(
         {"restaurant_id": restaurant_id},
@@ -12568,7 +12602,7 @@ async def export_ardoise_sales_pdf_by_restaurant(
     )
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant non trouvé")
-    restaurant_name = restaurant.get("name", "Restaurant")
+    restaurant_name = clean_text(restaurant.get("name", "Restaurant"))
     
     today = datetime.now(timezone.utc).date()
     if period == "day":
@@ -12648,7 +12682,8 @@ async def export_ardoise_sales_pdf_by_restaurant(
     sorted_items = sorted(items_stats.items(), key=lambda x: x[1]["total_qty"], reverse=True)
     
     for name, data in sorted_items:
-        display_name = name[:35] + "..." if len(name) > 35 else name
+        clean_name = clean_text(name)
+        display_name = clean_name[:35] + "..." if len(clean_name) > 35 else clean_name
         cat_label = {"entree": "Entree", "plat": "Plat", "dessert": "Dessert"}.get(data["category"], data["category"])
         pdf.cell(100, 7, display_name, border=1)
         pdf.cell(40, 7, cat_label, border=1)
