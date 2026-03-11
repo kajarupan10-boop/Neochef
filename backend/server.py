@@ -12045,27 +12045,39 @@ class PlannedArdoiseRequest(BaseModel):
 @api_router.get("/ardoise/planned/{restaurant_id}")
 async def get_planned_ardoise(restaurant_id: str, date: str):
     """Récupérer l'ardoise planifiée pour une date donnée"""
+    today = datetime.now(timezone.utc).date().isoformat()
+    
     planned = await ardoise_planned_collection.find_one(
         {"restaurant_id": restaurant_id, "date": date},
         {"_id": 0}
     )
     
     if not planned:
-        # Retourner l'ardoise actuelle si pas de planification
-        current = await ardoise_collection.find_one(
-            {"restaurant_id": restaurant_id},
-            {"_id": 0}
-        )
-        if current:
-            return {
-                "found": False,
-                "is_current": True,
-                "entree": current.get("entree", []),
-                "plat": current.get("plat", []),
-                "dessert": current.get("dessert", []),
-                "formule_prices": current.get("formule_prices", {})
-            }
-        return {"found": False, "is_current": False, "entree": [], "plat": [], "dessert": [], "formule_prices": {}}
+        # Si c'est aujourd'hui et pas de planification, retourner l'ardoise actuelle
+        if date == today:
+            current = await ardoise_collection.find_one(
+                {"restaurant_id": restaurant_id},
+                {"_id": 0}
+            )
+            if current:
+                return {
+                    "found": False,
+                    "is_current": True,
+                    "entree": current.get("entree", []),
+                    "plat": current.get("plat", []),
+                    "dessert": current.get("dessert", []),
+                    "formule_prices": current.get("formule_prices", {})
+                }
+        
+        # Pour les jours futurs sans planification, retourner VIDE
+        return {
+            "found": False,
+            "is_current": False,
+            "entree": [],
+            "plat": [],
+            "dessert": [],
+            "formule_prices": {}
+        }
     
     return {
         "found": True,
