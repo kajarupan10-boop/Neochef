@@ -253,6 +253,10 @@ menu_restaurant_sections_collection = db.mep_menu_restaurant_sections  # Section
 menu_restaurant_items_collection = db.mep_menu_restaurant_items  # Menu items with prices
 menu_restaurant_notes_collection = db.mep_menu_restaurant_notes  # Menu notes (Happy Hour, etc.)
 
+# Menu Restaurant Draft Collections (Brouillon)
+menu_restaurant_draft_sections_collection = db.mep_menu_restaurant_draft_sections
+menu_restaurant_draft_items_collection = db.mep_menu_restaurant_draft_items
+
 # Events Collections (Module Événements)
 events_collection = db.mep_events  # Événements
 event_providers_collection = db.mep_event_providers  # Prestataires
@@ -11522,6 +11526,129 @@ async def bulk_import_menu_restaurant(
         "message": f"Import réussi pour Carte {menu_type.capitalize()}",
         "stats": stats
     }
+
+# ==================== MENU RESTAURANT DRAFT ENDPOINTS ====================
+# Menu Restaurant en cours (Brouillon) - Modifications sans affecter le menu public
+
+@api_router.get("/menu-restaurant-draft/sections/list")
+async def list_menu_restaurant_draft_sections(current_user: dict = Depends(get_current_user)):
+    """Liste les sections du brouillon du menu restaurant"""
+    restaurant_id = current_user["restaurant_id"]
+    sections = await menu_restaurant_draft_sections_collection.find(
+        {"restaurant_id": restaurant_id}, {"_id": 0}
+    ).sort("order", 1).to_list(200)
+    return sections
+
+@api_router.get("/menu-restaurant-draft/items/list")
+async def list_menu_restaurant_draft_items(current_user: dict = Depends(get_current_user)):
+    """Liste les items du brouillon du menu restaurant"""
+    restaurant_id = current_user["restaurant_id"]
+    items = await menu_restaurant_draft_items_collection.find(
+        {"restaurant_id": restaurant_id}, {"_id": 0}
+    ).sort("order", 1).to_list(500)
+    return items
+
+@api_router.post("/menu-restaurant-draft/sections")
+async def create_menu_restaurant_draft_section(request: Request, current_user: dict = Depends(get_current_user)):
+    """Créer une section dans le brouillon"""
+    restaurant_id = current_user["restaurant_id"]
+    data = await request.json()
+    
+    section_id = str(uuid.uuid4())
+    section = {
+        "section_id": section_id,
+        "restaurant_id": restaurant_id,
+        "name": data.get("name", ""),
+        "menu_type": data.get("menu_type", "food"),
+        "parent_id": data.get("parent_id"),
+        "order": data.get("order", 999),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await menu_restaurant_draft_sections_collection.insert_one(section)
+    return {"section_id": section_id, "message": "Section créée"}
+
+@api_router.post("/menu-restaurant-draft/items")
+async def create_menu_restaurant_draft_item(request: Request, current_user: dict = Depends(get_current_user)):
+    """Créer un item dans le brouillon"""
+    restaurant_id = current_user["restaurant_id"]
+    data = await request.json()
+    
+    item_id = str(uuid.uuid4())
+    item = {
+        "item_id": item_id,
+        "restaurant_id": restaurant_id,
+        "section_id": data.get("section_id"),
+        "name": data.get("name", ""),
+        "description": data.get("description", ""),
+        "descriptions": [data.get("description", "")] if data.get("description") else [],
+        "price": data.get("price", 0),
+        "menu_type": data.get("menu_type", "food"),
+        "order": data.get("order", 999),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await menu_restaurant_draft_items_collection.insert_one(item)
+    return {"item_id": item_id, "message": "Item créé"}
+
+@api_router.delete("/menu-restaurant-draft/sections/{section_id}")
+async def delete_menu_restaurant_draft_section(section_id: str, current_user: dict = Depends(get_current_user)):
+    """Supprimer une section du brouillon"""
+    restaurant_id = current_user["restaurant_id"]
+    await menu_restaurant_draft_sections_collection.delete_one({"section_id": section_id, "restaurant_id": restaurant_id})
+    await menu_restaurant_draft_items_collection.delete_many({"section_id": section_id, "restaurant_id": restaurant_id})
+    return {"message": "Section supprimée"}
+
+@api_router.delete("/menu-restaurant-draft/items/{item_id}")
+async def delete_menu_restaurant_draft_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    """Supprimer un item du brouillon"""
+    restaurant_id = current_user["restaurant_id"]
+    await menu_restaurant_draft_items_collection.delete_one({"item_id": item_id, "restaurant_id": restaurant_id})
+    return {"message": "Item supprimé"}
+
+@api_router.post("/menu-restaurant-draft/initialize")
+async def initialize_menu_restaurant_draft(current_user: dict = Depends(get_current_user)):
+    """Initialiser le brouillon depuis le menu restaurant actuel"""
+    restaurant_id = current_user["restaurant_id"]
+    
+    # Supprimer le brouillon existant
+    await menu_restaurant_draft_sections_collection.delete_many({"restaurant_id": restaurant_id})
+    await menu_restaurant_draft_items_collection.delete_many({"restaurant_id": restaurant_id})
+    
+    # Copier les sections
+    sections = await menu_restaurant_sections_collection.find({"restaurant_id": restaurant_id}, {"_id": 0}).to_list(200)
+    for section in sections:
+        section["restaurant_id"] = restaurant_id
+        await menu_restaurant_draft_sections_collection.insert_one(section)
+    
+    # Copier les items
+    items = await menu_restaurant_items_collection.find({"restaurant_id": restaurant_id}, {"_id": 0}).to_list(500)
+    for item in items:
+        item["restaurant_id"] = restaurant_id
+        await menu_restaurant_draft_items_collection.insert_one(item)
+    
+    return {"message": "Brouillon initialisé", "sections": len(sections), "items": len(items)}
+
+@api_router.post("/menu-restaurant-draft/publish")
+async def publish_menu_restaurant_draft(current_user: dict = Depends(get_current_user)):
+    """Publier le brouillon vers le menu restaurant (et donc le menu client)"""
+    restaurant_id = current_user["restaurant_id"]
+    
+    # Supprimer le menu actuel
+    await menu_restaurant_sections_collection.delete_many({"restaurant_id": restaurant_id})
+    await menu_restaurant_items_collection.delete_many({"restaurant_id": restaurant_id})
+    
+    # Copier le brouillon vers le menu principal
+    draft_sections = await menu_restaurant_draft_sections_collection.find({"restaurant_id": restaurant_id}, {"_id": 0}).to_list(200)
+    for section in draft_sections:
+        await menu_restaurant_sections_collection.insert_one(section)
+    
+    draft_items = await menu_restaurant_draft_items_collection.find({"restaurant_id": restaurant_id}, {"_id": 0}).to_list(500)
+    for item in draft_items:
+        await menu_restaurant_items_collection.insert_one(item)
+    
+    return {"message": "Menu publié avec succès", "sections": len(draft_sections), "items": len(draft_items)}
+
 
 # ==================== A L'ARDOISE ENDPOINTS ====================
 # Menu "A l'Ardoise" avec structure fixe et lien partageable permanent
