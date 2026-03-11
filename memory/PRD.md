@@ -85,5 +85,5 @@ Permissions granulaires pour le module Ardoise :
 - Password: LeCercle123!
 
 ## URLs
-- Preview: https://neochef-ardoise.preview.emergentagent.com
+- Preview: https://pwa-ios-fix.preview.emergentagent.com
 - Production: https://neochef-pwa-2.emergent.host (ancien, à mettre à jour)
