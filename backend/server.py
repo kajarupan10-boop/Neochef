@@ -63,7 +63,10 @@ async def regenerate_translations_background(restaurant_id: str):
             {"_id": 0}
         ).to_list(2000)
         
-        if not sections and not items:
+        # Get ardoise data for this restaurant
+        ardoise = await ardoise_collection.find_one({"restaurant_id": restaurant_id})
+        
+        if not sections and not items and not ardoise:
             logging.info(f"No items to translate for restaurant {restaurant_id}")
             return
         
@@ -92,6 +95,21 @@ async def regenerate_translations_background(restaurant_id: str):
                     idx = len(texts_to_translate)
                     texts_to_translate.append(desc)
                     text_mapping[idx] = ("item", item.get("item_id"), f"description_{desc_idx}")
+        
+        # Add ardoise items
+        if ardoise:
+            for category in ['entree', 'plat', 'dessert']:
+                for item_idx, item in enumerate(ardoise.get(category, [])):
+                    name = item.get("name", "")
+                    desc = item.get("description", "")
+                    if name:
+                        idx = len(texts_to_translate)
+                        texts_to_translate.append(name)
+                        text_mapping[idx] = ("ardoise", f"{category}_{item_idx}", "name")
+                    if desc:
+                        idx = len(texts_to_translate)
+                        texts_to_translate.append(desc)
+                        text_mapping[idx] = ("ardoise", f"{category}_{item_idx}", "description")
         
         if not texts_to_translate:
             return
@@ -148,12 +166,12 @@ Items: {batch}"""
                     logging.error(f"Translation batch error for {lang_code}: {e}")
                     continue
         
-        # Save to database
+        # Save to database - wrap in 'translations' key to match expected format
         await translations_collection.update_one(
             {"restaurant_id": restaurant_id},
             {"$set": {
                 "restaurant_id": restaurant_id,
-                **all_translations,
+                "translations": all_translations,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }},
             upsert=True
@@ -1960,6 +1978,84 @@ Do not add numbers, bullets, or any extra formatting."""
         logging.error(f"Translation error: {str(e)}")
         # Return original texts on error
         return {"translations": request.texts, "error": str(e)}
+
+@api_router.post("/translate-and-store/{restaurant_id}")
+async def translate_and_store_item(restaurant_id: str, item_data: dict = Body(...)):
+    """Translate a menu item and store translations in database"""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    item_id = item_data.get("item_id")
+    item_name = item_data.get("name", "")
+    item_descriptions = item_data.get("descriptions", [])
+    
+    if not item_id or not item_name:
+        raise HTTPException(status_code=400, detail="item_id and name are required")
+    
+    try:
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            logging.warning("EMERGENT_LLM_KEY not configured, skipping auto-translation")
+            return {"success": False, "message": "Translation service not configured"}
+        
+        # Get existing translations
+        trans_doc = await translations_collection.find_one({"restaurant_id": restaurant_id})
+        if not trans_doc:
+            trans_doc = {"restaurant_id": restaurant_id, "translations": {}}
+        
+        translations = trans_doc.get("translations", {})
+        
+        # Prepare texts to translate
+        texts_to_translate = [item_name]
+        texts_to_translate.extend([d for d in item_descriptions if d.strip()])
+        
+        # Translate to all supported languages
+        target_languages = ["en", "es", "de", "it", "zh", "ru", "pt"]
+        
+        for target_lang in target_languages:
+            if target_lang not in translations:
+                translations[target_lang] = {}
+            
+            # Create translation request
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"translate_{uuid.uuid4().hex[:8]}",
+                system_message=f"""You are a professional translator specializing in restaurant menus.
+Translate the following items from French to {SUPPORTED_LANGUAGES.get(target_lang, target_lang)}.
+Keep food item names authentic when appropriate (e.g., 'Tiramisu' stays 'Tiramisu').
+Maintain formatting and punctuation.
+Return ONLY the translations, one per line, in the same order as the input.
+Do not add numbers, bullets, or any extra formatting."""
+            ).with_model("openai", "gpt-4.1-mini")
+            
+            input_text = "\n".join(texts_to_translate)
+            user_message = UserMessage(text=input_text)
+            response = await chat.send_message(user_message)
+            
+            translated_texts = response.strip().split("\n")
+            
+            # Store name translation
+            if len(translated_texts) > 0:
+                translations[target_lang][f"item_{item_id}_name"] = translated_texts[0]
+            
+            # Store description translations
+            desc_idx = 0
+            for i, text in enumerate(translated_texts[1:]):
+                if desc_idx < len(item_descriptions):
+                    translations[target_lang][f"item_{item_id}_description_{desc_idx}"] = text
+                    desc_idx += 1
+        
+        # Save translations to database
+        await translations_collection.update_one(
+            {"restaurant_id": restaurant_id},
+            {"$set": {"translations": translations}},
+            upsert=True
+        )
+        
+        return {"success": True, "message": "Item translated successfully"}
+        
+    except Exception as e:
+        logging.error(f"Auto-translation error: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 # ==================== MULTI-RESTAURANT ENDPOINTS ====================
 
