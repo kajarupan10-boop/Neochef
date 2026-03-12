@@ -16420,13 +16420,16 @@ async def start_keep_alive_task():
 async def create_superadmin_if_not_exists():
     """Create Super Admin account if it doesn't exist"""
     try:
-        superadmin_email = "neochef.fr@gmail.com"
+        superadmin_email = os.environ.get("SUPERADMIN_EMAIL", "neochef.fr@gmail.com")
         existing = await users_collection.find_one({"email": superadmin_email})
         
         if not existing:
             import secrets
             # Create password hash with salt (format: salt$hash)
-            password = "Kajan1012"
+            password = os.environ.get("SUPERADMIN_PASSWORD")
+            if not password:
+                logger.warning("SUPERADMIN_PASSWORD not set in environment, skipping superadmin creation")
+                return
             salt = secrets.token_hex(16)
             password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
             full_hash = f"{salt}${password_hash}"
