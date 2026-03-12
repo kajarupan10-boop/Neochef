@@ -1,89 +1,104 @@
 # NeoChef PWA - Product Requirements Document
 
 ## Original Problem Statement
-Migration d'une application PWA existante nommée "NeoChef" pour la gestion de restaurants. L'objectif principal est d'obtenir une URL de production stable et permanente.
+Migration d'une application PWA existante nommée "NeoChef" pour la gestion de restaurants. L'application inclut un système complet de gestion avec :
+- Back-office Super Admin pour gérer tous les restaurants de la plateforme
+- Système de permissions granulaires pour contrôler l'accès aux modules
+- Système de menu "brouillon" avant publication
+- Module de gestion des prestataires
+- Notification de mise à jour pour la PWA
 
 ## Stack Technologique
-- Frontend: React Native/Expo (build web statique)
+- Frontend: React Native/Expo for Web (build statique)
 - Backend: FastAPI (Python)
 - Base de données: MongoDB
+- Email: SendGrid
 
 ## Core Features
 
-### 1. Gestion de base
-- Gestion des menus
-- Système de réservations
-- Génération de factures PDF
-- Gestion multi-restaurants (Holding)
-- Menu public via QR code
+### 1. Back-Office Super Admin
+- Tableau de bord avec vue sur tous les restaurants et utilisateurs
+- Création de nouveaux comptes restaurants
+- Réinitialisation manuelle des mots de passe utilisateurs
+- Accès via login spécial `superadmin`
 
-### 2. Module Ardoise (A L'ARDOISE)
-- Édition des plats du jour
-- Suivi des quantités vendues par jour
-- Rapports de ventes (PDF/Excel)
-- Calendrier pour saisir/modifier les ventes des jours passés
-- Suggestions IA basées sur l'historique
-- Planification des ardoises des jours à venir
-- Export du planning des ardoises futures
+### 2. Système de Permissions Granulaires
+- Contrôle d'accès en lecture/écriture aux différents modules
+- Permission spécifique pour le bouton "Publier" du menu brouillon (à implémenter)
+- 3 sections pour le module Ardoise: Édition, Ventes, Rapports
 
-### 3. Système de Permissions (Nouveau - Mars 2026)
-Permissions granulaires pour le module Ardoise :
-- **Édition** : Accès oui/non + mode lecture seule ou modifier
-- **Ventes** : Accès oui/non + mode lecture seule ou modifier
-- **Rapports** : Accès oui/non + mode lecture seule ou modifier + Export PDF/Excel
+### 3. Système de Menu Brouillon
+- Environnement de test "Menu en cours" pour modifications sans affecter le menu public
+- Bouton "Publier" pour appliquer les changements au menu public
+- Initialisation automatique du menu brouillon
 
-## What's Been Implemented
+### 4. Gestion des Prestataires
+- CRUD complet pour la gestion des prestataires
+- Intégration avec le module Événements (à compléter)
 
-### Session Mars 2026
-- [x] Nouveau système de permissions Ardoise avec 3 sections (Édition, Ventes, Rapports)
-- [x] Mode lecture seule vs modifier pour chaque section
-- [x] Export PDF/Excel conditionné aux permissions
-- [x] Espacement réduit sur l'écran "Rapport Ardoise"
-- [x] Backend mis à jour avec nouveaux modèles de permissions
-- [x] Synchronisation build frontend corrigée
+### 5. PWA
+- Notification de mise à jour pour informer les utilisateurs
+- Service Worker pour le cache et fonctionnement hors-ligne
+- Support iOS avec gestion des safe areas (encoche/home indicator)
+
+## What's Been Implemented (Mars 2026)
+
+### Session actuelle
+- [x] Correction CSS pour les espaces vides sur PWA iOS (safe areas)
+- [x] Suppression des padding body problématiques
+- [x] Header avec paddingTop pour env(safe-area-inset-top)
+- [x] BottomNav avec paddingBottom pour env(safe-area-inset-bottom)
 
 ### Sessions précédentes
-- [x] Visibilité de l'ardoise sur le menu client
-- [x] Interface de planification d'ardoise avec calendrier
-- [x] Interface de suggestion de plats avec historique
-- [x] Calendrier dans l'onglet des ventes
-- [x] Correction des bugs PDF (apostrophes, format paysage)
-- [x] Correction des problèmes de connexion utilisateur
+- [x] Back-office Super Admin complet
+- [x] Module Prestataires (CRUD)
+- [x] Notification de mise à jour PWA
+- [x] Correction bug réinitialisation mot de passe SendGrid
+- [x] Correction suppression éléments menu brouillon
+- [x] Correction UI écran "Équipe" avec menu déroulant
+- [x] Système de permissions Ardoise
+- [x] Déploiement en production avec script initialisation
 
 ## Prioritized Backlog
 
-### P0 (Critique)
-- [ ] Déployer en production les nouvelles fonctionnalités
+### P0 (Critique) - En cours
+- [ ] Validation correction espaces vides PWA iOS (nécessite test utilisateur sur vrai iPhone)
 
 ### P1 (Important)
-- [ ] Téléchargement PDF sur mobile iOS (implémenter navigator.share)
-- [ ] Vérifier l'export du planning des ardoises
+- [ ] Aperçu PDF blanc sur iOS - explorer solution react-pdf
+- [ ] Refactoring server.py et index.tsx (monolithes > 10k lignes)
 
 ### P2 (Normal)
-- [ ] Vérifier les traductions sur le menu client public
+- [ ] Permission pour bouton "Publier" du menu brouillon
+- [ ] Intégration sélection prestataires dans écran Événements
+- [ ] Export planning ardoises et vérification traductions
 
 ### P3 (Nice to have)
-- [ ] Refactoriser index.tsx (~5000 lignes) en composants
-- [ ] Automatiser le build/déploiement
+- [ ] Automatiser process de build/déploiement
 
 ## Key Files
-- `/app/backend/server.py` - Backend FastAPI monolithique
-- `/app/temp_clone/frontend/app/index.tsx` - Frontend React monolithique
-- `/app/temp_clone/frontend/app/client/[restaurant_id].tsx` - Menu client public
+- `/app/backend/server.py` - Backend FastAPI monolithique (~13k lignes)
+- `/app/temp_clone/frontend/app/index.tsx` - Frontend React monolithique (~24k lignes)
+- `/app/frontend/build/index.html` - HTML généré avec CSS safe area corrigé
+- `/app/frontend/build/sw.js` - Service Worker pour PWA
 
 ## Database Schema
-- `mep_restaurants`: { _id, name, share_token }
-- `ardoise_items`: { restaurant_id, name, category }
-- `ardoise_formula_prices`: { restaurant_id, name, price }
-- `ardoise_sales_history`: { restaurant_id, date, service, sales }
-- `planned_ardoises`: { restaurant_id, date, entrees, plats, desserts }
-- `translations`: { key, lang, value }
+- `users`: { _id, email, password, role: 'admin'|'staff'|'superadmin', restaurants }
+- `mep_restaurants`: { _id, name, share_token, primary_color, secondary_color }
+- `prestataires`: { _id, restaurant_id, name, contact, email, phone, speciality }
+- `ardoise_items`, `ardoise_sales_history`, `planned_ardoises`
 
 ## Test Credentials
-- Email: groupenaga@gmail.com
-- Restaurant: Le Cercle
-- Password: LeCercle123!
+- Super Admin: neochef.fr@gmail.com / Kajan1012
+- Utilisateur standard: groupenaga@gmail.com / LeCercle123!
 
 ## URLs
-- Preview: https://pwa-ios-fix.preview.emergentagent.com
-- Production: https://neochef-pwa-2.emergent.host (ancien, à mettre à jour)
+- Preview: https://neochef-admin.preview.emergentagent.com
+- Production: À confirmer après déploiement
+
+## Process de Build
+1. Modifier dans `/app/temp_clone/frontend/`
+2. Exécuter `yarn expo export --platform web`
+3. Copier `/app/temp_clone/frontend/dist/*` vers `/app/frontend/build/`
+4. Corriger CSS safe area dans index.html si nécessaire
+5. Redémarrer frontend: `sudo supervisorctl restart frontend`
