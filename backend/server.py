@@ -1255,7 +1255,9 @@ async def login(request: LoginRequest):
             "restaurant_ids": user_doc.get("restaurant_ids", []),
             "holding_name": user_doc.get("holding_name"),
             "assigned_categories": user_doc.get("assigned_categories", []),
-            "notification_prefs": user_doc.get("notification_prefs", {})
+            "notification_prefs": user_doc.get("notification_prefs", {}),
+            "permissions": user_doc.get("permissions", {}),
+            "detailed_permissions": user_doc.get("detailed_permissions", {})
         },
         "restaurant": restaurant_doc
     }
@@ -1402,7 +1404,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "restaurant_ids": current_user.get("restaurant_ids", []),
             "holding_name": current_user.get("holding_name"),
             "assigned_categories": current_user.get("assigned_categories", []),
-            "notification_prefs": current_user.get("notification_prefs", {})
+            "notification_prefs": current_user.get("notification_prefs", {}),
+            "permissions": current_user.get("permissions", {}),
+            "detailed_permissions": current_user.get("detailed_permissions", {})
         },
         "restaurant": restaurant_doc
     }
