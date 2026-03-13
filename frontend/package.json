@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "serve -s build -l 3000",
-    "build": "cp -r /app/backend/dist/* build/ && echo 'Build complete'"
+    "start": "serve -s build -l 3000"
   },
   "dependencies": {
     "serve": "^14.2.0"
