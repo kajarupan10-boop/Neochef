@@ -93,7 +93,7 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 - Utilisateur standard: groupenaga@gmail.com / LeCercle123!
 
 ## URLs
-- Preview: https://neochef-admin.preview.emergentagent.com
+- Preview: https://staff-permissions-v2.preview.emergentagent.com
 - Production: À confirmer après déploiement
 
 ## Process de Build
