@@ -1,0 +1,1331 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Alert, Platform, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import QRCode from 'react-native-qrcode-svg';
+import { CameraView, Camera } from 'expo-camera';
+import { COLORS, LOYALTY_CONFIG } from '../constants/theme';
+
+const BACKEND_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL;
+
+type User = {
+  user_id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  loyalty_points: number;
+};
+
+type Transaction = {
+  transaction_id: string;
+  type: string;
+  amount: number;
+  points_earned: number;
+  points_used: number;
+  description: string;
+  created_at: string;
+};
+
+type GiftCard = {
+  gift_card_id: string;
+  code: string;
+  amount: number;
+  balance: number;
+  status: string;
+  created_at: string;
+};
+
+export default function Index() {
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'auth-callback' | 'home' | 'gift-cards' | 'history' | 'profile' | 'pos-mode'>('login');
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
+  const [giftCardAmount, setGiftCardAmount] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [useGiftCardCode, setUseGiftCardCode] = useState('');
+  const hasProcessedAuth = useRef(false);
+
+  // POS Mode states
+  const [posMode, setPosMode] = useState<'scan' | 'process' | 'success'>('scan');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scannedCustomer, setScannedCustomer] = useState<User | null>(null);
+  const [posAmount, setPosAmount] = useState('');
+  const [posAction, setPosAction] = useState<'purchase' | 'redeem'>('purchase');
+  const [posPoints, setPosPoints] = useState('');
+
+  // Request camera permission
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  // Handle URL fragments for auth callback
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      
+      // Check for session_id in URL fragment (auth callback)
+      if (hash.includes('session_id=')) {
+        if (!hasProcessedAuth.current) {
+          hasProcessedAuth.current = true;
+          const sessionId = hash.split('session_id=')[1]?.split('&')[0];
+          if (sessionId) {
+            handleAuthCallback(sessionId);
+          }
+        }
+      }
+      // Check for session_id in query params (payment success)
+      else if (search.includes('session_id=')) {
+        const params = new URLSearchParams(search);
+        const sessionId = params.get('session_id');
+        if (sessionId && currentScreen === 'gift-cards') {
+          checkPaymentStatus(sessionId);
+        }
+      }
+    }
+  }, [currentScreen]);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        setCurrentScreen('home');
+      } else {
+        setCurrentScreen('login');
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      setCurrentScreen('login');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAuthCallback = async (sessionId: string) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ session_id: sessionId })
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        setCurrentScreen('home');
+        
+        // Clean URL
+        if (Platform.OS === 'web') {
+          window.history.replaceState({}, '', '/');
+        }
+      } else {
+        Alert.alert('Erreur', 'Échec de l\'authentification');
+        setCurrentScreen('login');
+      }
+    } catch (error) {
+      console.error('Auth callback error:', error);
+      Alert.alert('Erreur', 'Échec de l\'authentification');
+      setCurrentScreen('login');
+    }
+  };
+
+  const handleLogin = () => {
+    if (Platform.OS === 'web') {
+      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+      const redirectUrl = window.location.origin;
+      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    } else {
+      Alert.alert('Info', 'La connexion Google n\'est disponible que sur le web pour le moment');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      setUser(null);
+      setCurrentScreen('login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const loadTransactions = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/transactions/history`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTransactions(data);
+      }
+    } catch (error) {
+      console.error('Load transactions error:', error);
+    }
+  };
+
+  const loadGiftCards = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/giftcard/my-cards`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setGiftCards(data);
+      }
+    } catch (error) {
+      console.error('Load gift cards error:', error);
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Refresh user error:', error);
+    }
+  };
+
+  const handleBuyGiftCard = async () => {
+    if (!giftCardAmount || parseFloat(giftCardAmount) <= 0) {
+      Alert.alert('Erreur', 'Veuillez entrer un montant valide');
+      return;
+    }
+
+    if (Platform.OS !== 'web') {
+      Alert.alert('Info', 'L\'achat de cartes-cadeaux n\'est disponible que sur le web pour le moment');
+      return;
+    }
+
+    try {
+      const originUrl = window.location.origin;
+      const response = await fetch(`${BACKEND_URL}/api/giftcard/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          amount: parseFloat(giftCardAmount),
+          recipient_email: recipientEmail || null,
+          origin_url: originUrl
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        window.location.href = data.url;
+      } else {
+        const error = await response.json();
+        Alert.alert('Erreur', error.detail || 'Échec de création de la session de paiement');
+      }
+    } catch (error) {
+      console.error('Buy gift card error:', error);
+      Alert.alert('Erreur', 'Échec de création de la session de paiement');
+    }
+  };
+
+  const checkPaymentStatus = async (sessionId: string) => {
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    const poll = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/giftcard/payment-status/${sessionId}`, {
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.payment_status === 'paid') {
+            Alert.alert('Succès', 'Carte-cadeau achetée avec succès!');
+            loadGiftCards();
+            setGiftCardAmount('');
+            setRecipientEmail('');
+            
+            // Clean URL
+            if (Platform.OS === 'web') {
+              window.history.replaceState({}, '', '/gift-cards');
+            }
+            return;
+          } else if (data.status === 'expired') {
+            Alert.alert('Erreur', 'Session de paiement expirée');
+            return;
+          }
+          
+          // Continue polling
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 2000);
+          }
+        }
+      } catch (error) {
+        console.error('Check payment status error:', error);
+      }
+    };
+    
+    poll();
+  };
+
+  const handleUseGiftCard = async () => {
+    if (!useGiftCardCode) {
+      Alert.alert('Erreur', 'Veuillez entrer un code de carte-cadeau');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/giftcard/use`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: useGiftCardCode })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert('Succès', `${data.points_earned} points ajoutés!`);
+        setUseGiftCardCode('');
+        refreshUser();
+        loadGiftCards();
+      } else {
+        const error = await response.json();
+        Alert.alert('Erreur', error.detail || 'Code invalide');
+      }
+    } catch (error) {
+      console.error('Use gift card error:', error);
+      Alert.alert('Erreur', 'Échec d\'utilisation de la carte-cadeau');
+    }
+  };
+
+  // POS Mode functions
+  const handleQRCodeScanned = async ({ data }: { data: string }) => {
+    try {
+      // The QR code contains the user_id
+      const userId = data;
+      
+      const response = await fetch(`${BACKEND_URL}/api/pos/customer/${userId}`);
+      
+      if (response.ok) {
+        const customerData = await response.json();
+        setScannedCustomer(customerData);
+        setPosMode('process');
+      } else {
+        Alert.alert('Erreur', 'Client non trouvé');
+      }
+    } catch (error) {
+      console.error('QR scan error:', error);
+      Alert.alert('Erreur', 'Erreur lors du scan');
+    }
+  };
+
+  const handlePOSPurchase = async () => {
+    if (!posAmount || parseFloat(posAmount) <= 0) {
+      Alert.alert('Erreur', 'Veuillez entrer un montant valide');
+      return;
+    }
+
+    if (!scannedCustomer) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/pos/add-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: scannedCustomer.user_id,
+          amount: parseFloat(posAmount),
+          description: 'Achat au restaurant'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert('Succès', `${data.points_added} points ajoutés!\nTotal: ${data.total_points} points`);
+        setPosMode('success');
+        setPosAmount('');
+        setTimeout(() => {
+          setPosMode('scan');
+          setScannedCustomer(null);
+        }, 3000);
+      } else {
+        const error = await response.json();
+        Alert.alert('Erreur', error.detail || 'Échec de l\'enregistrement');
+      }
+    } catch (error) {
+      console.error('POS purchase error:', error);
+      Alert.alert('Erreur', 'Échec de l\'enregistrement');
+    }
+  };
+
+  const handlePOSRedeem = async () => {
+    if (!posPoints || parseFloat(posPoints) <= 0) {
+      Alert.alert('Erreur', 'Veuillez entrer un nombre de points valide');
+      return;
+    }
+
+    if (!scannedCustomer) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/pos/redeem-points`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: scannedCustomer.user_id,
+          points: parseFloat(posPoints),
+          description: 'Réduction fidélité'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        Alert.alert('Succès', `${data.points_redeemed} points utilisés!\nTotal: ${data.total_points} points`);
+        setPosMode('success');
+        setPosPoints('');
+        setTimeout(() => {
+          setPosMode('scan');
+          setScannedCustomer(null);
+        }, 3000);
+      } else {
+        const error = await response.json();
+        Alert.alert('Erreur', error.detail || 'Échec de l\'utilisation');
+      }
+    } catch (error) {
+      console.error('POS redeem error:', error);
+      Alert.alert('Erreur', 'Échec de l\'utilisation');
+    }
+  };
+
+  // Load data when switching screens
+  useEffect(() => {
+    if (currentScreen === 'history' && user) {
+      loadTransactions();
+    } else if (currentScreen === 'gift-cards' && user) {
+      loadGiftCards();
+    } else if (currentScreen === 'pos-mode') {
+      setPosMode('scan');
+      setScannedCustomer(null);
+    }
+  }, [currentScreen, user]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+      </View>
+    );
+  }
+
+  // Login Screen
+  if (currentScreen === 'login') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loginContainer}>
+          <Image 
+            source={require('../assets/images/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.loginTitle}>Programme de Fidélité</Text>
+          <Text style={styles.loginSubtitle}>Gagnez des points à chaque visite</Text>
+          <Text style={styles.loyaltyInfo}>{LOYALTY_CONFIG.earnMessage}</Text>
+          
+          <TouchableOpacity style={styles.googleButton} onPress={handleLogin}>
+            <Ionicons name="logo-google" size={24} color="white" />
+            <Text style={styles.googleButtonText}>Se connecter avec Google</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Home Screen
+  if (currentScreen === 'home') {
+    return (
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Bienvenue</Text>
+            <Text style={styles.headerSubtitle}>{user?.name}</Text>
+          </View>
+
+          <View style={styles.pointsCard}>
+            <Ionicons name="star" size={48} color="#FCD34D" />
+            <Text style={styles.pointsValue}>{user?.loyalty_points.toFixed(1)}</Text>
+            <Text style={styles.pointsLabel}>Points de fidélité</Text>
+          </View>
+
+          <View style={styles.qrSection}>
+            <Text style={styles.sectionTitle}>Votre carte de fidélité</Text>
+            <Text style={styles.qrSubtitle}>Présentez ce QR code à la caisse</Text>
+            <View style={styles.qrContainer}>
+              {user && (
+                <QRCode
+                  value={user.user_id}
+                  size={200}
+                  backgroundColor="white"
+                />
+              )}
+            </View>
+            <Text style={styles.qrHint}>Scannez ce code pour gagner des points</Text>
+          </View>
+        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+            <Ionicons name="home" size={24} color="#4F46E5" />
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Accueil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+            <Ionicons name="gift" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Cartes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+            <Ionicons name="time" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Historique</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+            <Ionicons name="cash-register" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Caisse</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+            <Ionicons name="person" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Profil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // POS Mode Screen
+  if (currentScreen === 'pos-mode') {
+    if (posMode === 'scan') {
+      return (
+        <View style={styles.container}>
+          <View style={styles.posHeader}>
+            <Text style={styles.posTitle}>Mode Caisse</Text>
+            <Text style={styles.posSubtitle}>Scannez le QR code du client</Text>
+          </View>
+
+          <View style={styles.cameraContainer}>
+            {hasPermission === false ? (
+              <Text style={styles.errorText}>Pas d'accès à la caméra</Text>
+            ) : Platform.OS === 'web' ? (
+              <Text style={styles.errorText}>Scanner QR uniquement disponible sur mobile</Text>
+            ) : (
+              <CameraView
+                style={styles.camera}
+                facing="back"
+                onBarcodeScanned={handleQRCodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
+              />
+            )}
+          </View>
+
+          <View style={styles.tabBar}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+              <Ionicons name="home" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Accueil</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+              <Ionicons name="gift" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Cartes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+              <Ionicons name="time" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Historique</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+              <Ionicons name="cash-register" size={24} color="#4F46E5" />
+              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Caisse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+              <Ionicons name="person" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Profil</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (posMode === 'process' && scannedCustomer) {
+      return (
+        <View style={styles.container}>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.posHeader}>
+              <Text style={styles.posTitle}>Client scanné</Text>
+            </View>
+
+            <View style={styles.customerCard}>
+              <Ionicons name="person-circle" size={60} color="#4F46E5" />
+              <Text style={styles.customerName}>{scannedCustomer.name}</Text>
+              <Text style={styles.customerEmail}>{scannedCustomer.email}</Text>
+              <View style={styles.pointsBadge}>
+                <Ionicons name="star" size={20} color="#FCD34D" />
+                <Text style={styles.customerPoints}>{scannedCustomer.loyalty_points.toFixed(1)} points</Text>
+              </View>
+            </View>
+
+            <View style={styles.posActionButtons}>
+              <TouchableOpacity 
+                style={[styles.posActionButton, posAction === 'purchase' && styles.posActionButtonActive]}
+                onPress={() => setPosAction('purchase')}
+              >
+                <Text style={[styles.posActionButtonText, posAction === 'purchase' && styles.posActionButtonTextActive]}>
+                  Ajouter achat
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.posActionButton, posAction === 'redeem' && styles.posActionButtonActive]}
+                onPress={() => setPosAction('redeem')}
+              >
+                <Text style={[styles.posActionButtonText, posAction === 'redeem' && styles.posActionButtonTextActive]}>
+                  Utiliser points
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {posAction === 'purchase' ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Montant de l'achat</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Montant en €"
+                  keyboardType="decimal-pad"
+                  value={posAmount}
+                  onChangeText={setPosAmount}
+                />
+                <TouchableOpacity style={styles.primaryButton} onPress={handlePOSPurchase}>
+                  <Text style={styles.primaryButtonText}>Valider l'achat</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Points à utiliser</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nombre de points"
+                  keyboardType="decimal-pad"
+                  value={posPoints}
+                  onChangeText={setPosPoints}
+                />
+                <TouchableOpacity style={styles.secondaryButton} onPress={handlePOSRedeem}>
+                  <Text style={styles.secondaryButtonText}>Utiliser les points</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity 
+              style={styles.cancelButton} 
+              onPress={() => {
+                setPosMode('scan');
+                setScannedCustomer(null);
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+          </ScrollView>
+
+          <View style={styles.tabBar}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+              <Ionicons name="home" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Accueil</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+              <Ionicons name="gift" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Cartes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+              <Ionicons name="time" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Historique</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+              <Ionicons name="cash-register" size={24} color="#4F46E5" />
+              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Caisse</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+              <Ionicons name="person" size={24} color="#6B7280" />
+              <Text style={styles.tabLabel}>Profil</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (posMode === 'success') {
+      return (
+        <View style={styles.container}>
+          <View style={styles.successContainer}>
+            <Ionicons name="checkmark-circle" size={100} color="#10B981" />
+            <Text style={styles.successTitle}>Opération réussie!</Text>
+          </View>
+        </View>
+      );
+    }
+  }
+
+  // Gift Cards Screen
+  if (currentScreen === 'gift-cards') {
+    return (
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Cartes-Cadeaux</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Acheter une carte-cadeau</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Montant en €"
+              keyboardType="decimal-pad"
+              value={giftCardAmount}
+              onChangeText={setGiftCardAmount}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email du destinataire (optionnel)"
+              keyboardType="email-address"
+              value={recipientEmail}
+              onChangeText={setRecipientEmail}
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={handleBuyGiftCard}>
+              <Text style={styles.primaryButtonText}>Acheter</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Utiliser une carte-cadeau</Text>
+            <View style={styles.inputGroup}>
+              <TextInput
+                style={styles.input}
+                placeholder="Code de la carte"
+                value={useGiftCardCode}
+                onChangeText={setUseGiftCardCode}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity style={styles.secondaryButton} onPress={handleUseGiftCard}>
+                <Text style={styles.secondaryButtonText}>Utiliser</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mes cartes-cadeaux</Text>
+            {giftCards.length === 0 ? (
+              <Text style={styles.emptyText}>Aucune carte-cadeau</Text>
+            ) : (
+              giftCards.map((card) => (
+                <View key={card.gift_card_id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <Ionicons name="gift" size={24} color="#4F46E5" />
+                    <Text style={styles.cardCode}>{card.code}</Text>
+                  </View>
+                  <View style={styles.cardDetails}>
+                    <Text style={styles.cardLabel}>Montant: {card.amount}€</Text>
+                    <Text style={styles.cardLabel}>Solde: {card.balance}€</Text>
+                    <Text style={[styles.cardStatus, card.status === 'active' ? styles.statusActive : styles.statusUsed]}>
+                      {card.status === 'active' ? 'Active' : 'Utilisée'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+            <Ionicons name="home" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Accueil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+            <Ionicons name="gift" size={24} color="#4F46E5" />
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Cartes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+            <Ionicons name="time" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Historique</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+            <Ionicons name="cash-register" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Caisse</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+            <Ionicons name="person" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Profil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // History Screen
+  if (currentScreen === 'history') {
+    return (
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Historique</Text>
+          </View>
+
+          {transactions.length === 0 ? (
+            <Text style={styles.emptyText}>Aucune transaction</Text>
+          ) : (
+            transactions.map((txn) => (
+              <View key={txn.transaction_id} style={styles.card}>
+                <View style={styles.transactionHeader}>
+                  <Ionicons 
+                    name={
+                      txn.type === 'purchase' ? 'cart' :
+                      txn.type === 'redemption' ? 'arrow-down' :
+                      'gift'
+                    } 
+                    size={24} 
+                    color={txn.points_earned > 0 ? '#10B981' : '#EF4444'} 
+                  />
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionDescription}>{txn.description}</Text>
+                    <Text style={styles.transactionDate}>
+                      {new Date(txn.created_at).toLocaleDateString('fr-FR')}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionPoints}>
+                    {txn.points_earned > 0 && (
+                      <Text style={styles.pointsEarned}>+{txn.points_earned}</Text>
+                    )}
+                    {txn.points_used > 0 && (
+                      <Text style={styles.pointsUsed}>-{txn.points_used}</Text>
+                    )}
+                    {txn.amount > 0 && (
+                      <Text style={styles.amount}>{txn.amount}€</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+            <Ionicons name="home" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Accueil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+            <Ionicons name="gift" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Cartes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+            <Ionicons name="time" size={24} color="#4F46E5" />
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Historique</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+            <Ionicons name="cash-register" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Caisse</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+            <Ionicons name="person" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Profil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Profile Screen
+  if (currentScreen === 'profile') {
+    return (
+      <View style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Profil</Text>
+          </View>
+
+          <View style={styles.profileCard}>
+            <Ionicons name="person-circle" size={80} color="#4F46E5" />
+            <Text style={styles.profileName}>{user?.name}</Text>
+            <Text style={styles.profileEmail}>{user?.email}</Text>
+          </View>
+
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Ionicons name="log-out" size={24} color="#EF4444" />
+              <Text style={styles.logoutButtonText}>Se déconnecter</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('home')}>
+            <Ionicons name="home" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Accueil</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('gift-cards')}>
+            <Ionicons name="gift" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Cartes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('history')}>
+            <Ionicons name="time" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Historique</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('pos-mode')}>
+            <Ionicons name="cash-register" size={24} color="#6B7280" />
+            <Text style={styles.tabLabel}>Caisse</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setCurrentScreen('profile')}>
+            <Ionicons name="person" size={24} color="#4F46E5" />
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return null;
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 80,
+  },
+  loginContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loginTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 48,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  googleButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  header: {
+    marginBottom: 24,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  headerSubtitle: {
+    fontSize: 18,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  pointsCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  pointsValue: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#4F46E5',
+    marginTop: 16,
+  },
+  pointsLabel: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  qrSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  qrSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  qrContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  qrHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  inputGroup: {
+    gap: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#4F46E5',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  cardCode: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  cardDetails: {
+    gap: 4,
+  },
+  cardLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  cardStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  statusActive: {
+    color: '#10B981',
+  },
+  statusUsed: {
+    color: '#6B7280',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 32,
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionDescription: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
+  },
+  transactionDate: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  transactionPoints: {
+    alignItems: 'flex-end',
+  },
+  pointsEarned: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  pointsUsed: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  amount: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  profileCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+  },
+  profileEmail: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  logoutButtonText: {
+    color: '#EF4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  tabLabel: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  tabLabelActive: {
+    color: '#4F46E5',
+    fontWeight: '600',
+  },
+  // POS Mode styles
+  posHeader: {
+    padding: 24,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+  },
+  posTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  posSubtitle: {
+    fontSize: 16,
+    color: '#E0E7FF',
+    marginTop: 8,
+  },
+  cameraContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  camera: {
+    width: '100%',
+    height: '100%',
+  },
+  errorText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 24,
+  },
+  customerCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  customerName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 12,
+  },
+  customerEmail: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  pointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  customerPoints: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  posActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  posActionButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  posActionButtonActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  posActionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  posActionButtonTextActive: {
+    color: 'white',
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#10B981',
+    marginTop: 24,
+  },
+});
