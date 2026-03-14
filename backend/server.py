@@ -1854,7 +1854,6 @@ Do not add numbers, bullets, or any extra formatting."""
 @api_router.post("/translate")
 async def translate_menu_items(request: TranslationRequest):
     """Translate menu item names and descriptions using OpenAI GPT"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
     
     if request.target_language not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported language: {request.target_language}")
@@ -1867,9 +1866,13 @@ async def translate_menu_items(request: TranslationRequest):
         return {"translations": request.texts}
     
     try:
+        # Import inside function to avoid startup issues
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        
         api_key = os.environ.get("EMERGENT_LLM_KEY")
         if not api_key:
-            raise HTTPException(status_code=500, detail="Translation service not configured")
+            logging.error("EMERGENT_LLM_KEY not configured")
+            return {"translations": request.texts, "error": "Translation service not configured"}
         
         # Create LLM chat instance
         chat = LlmChat(
@@ -1904,6 +1907,9 @@ Do not add numbers, bullets, or any extra formatting."""
         
         return {"translations": translations}
         
+    except ImportError as e:
+        logging.error(f"Translation import error: {str(e)}")
+        return {"translations": request.texts, "error": "Translation library not available"}
     except Exception as e:
         logging.error(f"Translation error: {str(e)}")
         # Return original texts on error
@@ -2444,6 +2450,7 @@ async def create_user(
         "password_hash": hash_password(create_request.password),
         "role": create_request.role,
         "restaurant_id": current_user["restaurant_id"],
+        "restaurant_ids": [current_user["restaurant_id"]],  # Initialize with current restaurant
         "name": create_request.name,
         "phone": create_request.phone,
         "assigned_categories": create_request.assigned_categories,
@@ -2461,6 +2468,46 @@ async def create_user(
         "restaurant_id": current_user["restaurant_id"],
         "assigned_categories": create_request.assigned_categories,
         "detailed_permissions": detailed_perms
+    }
+
+@api_router.post("/users/{user_id}/add-restaurant/{restaurant_id}")
+async def add_user_to_restaurant(
+    user_id: str,
+    restaurant_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Add a user to an additional restaurant (superadmin or admin with multi-restaurant access)"""
+    if current_user["role"] not in ["admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Find the user
+    target_user = await users_collection.find_one({"user_id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify the restaurant exists
+    restaurant = await restaurants_collection.find_one({"restaurant_id": restaurant_id})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Get current restaurant_ids
+    current_restaurant_ids = target_user.get("restaurant_ids", [])
+    if target_user.get("restaurant_id") and target_user["restaurant_id"] not in current_restaurant_ids:
+        current_restaurant_ids.append(target_user["restaurant_id"])
+    
+    # Add the new restaurant if not already present
+    if restaurant_id not in current_restaurant_ids:
+        current_restaurant_ids.append(restaurant_id)
+    
+    # Update the user
+    await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"restaurant_ids": current_restaurant_ids}}
+    )
+    
+    return {
+        "message": f"User added to restaurant {restaurant.get('name', restaurant_id)}",
+        "restaurant_ids": current_restaurant_ids
     }
 
 @api_router.get("/users/list")
