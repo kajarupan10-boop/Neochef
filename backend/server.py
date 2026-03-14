@@ -16296,6 +16296,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Root endpoint for deployment health check
+@app.get("/")
+async def root_health():
+    """Root endpoint - returns simple OK for deployment checks"""
+    return {"status": "ok"}
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
