@@ -16522,7 +16522,13 @@ async def start_keep_alive_task():
 
 @app.on_event("startup")
 async def create_superadmin_if_not_exists():
-    """Create Super Admin account if it doesn't exist"""
+    """Create Super Admin account if it doesn't exist - DISABLED FOR NOW"""
+    # Temporarily disabled to simplify deployment
+    logging.info("[STARTUP] SuperAdmin auto-creation disabled")
+    return
+    
+    # Original code below (commented out)
+    """
     try:
         superadmin_email = os.environ.get("SUPERADMIN_EMAIL", "neochef.fr@gmail.com")
         existing = await users_collection.find_one({"email": superadmin_email})
@@ -16555,6 +16561,7 @@ async def create_superadmin_if_not_exists():
             logging.info(f"[STARTUP] Super Admin account already exists: {superadmin_email}")
     except Exception as e:
         logging.error(f"[STARTUP] Error creating Super Admin: {e}")
+    """
 
 @app.on_event("shutdown")
 async def stop_keep_alive_task():
