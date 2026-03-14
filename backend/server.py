@@ -16500,9 +16500,8 @@ async def keep_preview_alive():
     # Wait 30 seconds before first ping to ensure app is fully ready
     await asyncio.sleep(30)
     
-    # Use environment variable for the URL
-    app_url = os.environ.get('APP_URL', os.environ.get('FRONTEND_URL', 'http://localhost:8001'))
-    health_url = f"{app_url}/api/health"
+    # Always use localhost for self-ping to avoid external URL issues
+    health_url = "http://localhost:8001/api/health"
     while True:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
