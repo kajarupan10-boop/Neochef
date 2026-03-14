@@ -16404,35 +16404,16 @@ async def shutdown_db_client():
     client.close()
 
 # ==================== KEEP PREVIEW ALIVE TASK ====================
-# Cette tâche ping le preview URL toutes les 5 minutes pour éviter le sleep
-import httpx
+# DISABLED for deployment - this was causing issues
+# Cette tâche est désactivée pour simplifier le déploiement
 
 _keep_alive_task = None
 
-async def keep_preview_alive():
-    """Background task to keep the app awake (self-ping)"""
-    # Wait 30 seconds before first ping to ensure app is fully ready
-    await asyncio.sleep(30)
-    
-    # Always use localhost for self-ping to avoid external URL issues
-    health_url = "http://localhost:8001/api/health"
-    while True:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(health_url)
-                logging.info(f"[KEEP-ALIVE] Self ping: {response.status_code}")
-        except Exception as e:
-            logging.warning(f"[KEEP-ALIVE] Self ping failed: {e}")
-        
-        # Wait 5 minutes before next ping
-        await asyncio.sleep(5 * 60)
-
 @app.on_event("startup")
 async def start_keep_alive_task():
-    """Start the keep-alive background task"""
-    global _keep_alive_task
-    _keep_alive_task = asyncio.create_task(keep_preview_alive())
-    logging.info("[KEEP-ALIVE] Background task started - app will stay awake")
+    """Start the keep-alive background task - DISABLED"""
+    # Disabled to simplify deployment
+    logging.info("[KEEP-ALIVE] Background task DISABLED for deployment")
 
 @app.on_event("startup")
 async def create_superadmin_if_not_exists():
