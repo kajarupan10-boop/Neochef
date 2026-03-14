@@ -317,6 +317,16 @@ if not FRONTEND_URL:
 
 # Create the main app
 app = FastAPI()
+
+# CRITICAL: Health check endpoint - MUST be first for deployment
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
 api_router = APIRouter(prefix="/api")
 
 # ==================== REQUEST/RESPONSE MODELS ====================
@@ -16116,23 +16126,7 @@ async def get_order_ticket(order_id: str):
     
     return Response(content=html, media_type="text/html")
 
-# ==================== ROOT ENDPOINT ====================
-
-from fastapi.responses import RedirectResponse
-
-# Serve PWA at root "/" 
-@app.get("/")
-async def serve_root():
-    """Serve the PWA index.html"""
-    # Chercher index.html local
-    possible_paths = [
-        Path(__file__).parent / "dist" / "index.html",
-        Path("/app/backend/dist/index.html"),
-    ]
-    
-    for index_path in possible_paths:
-        if index_path.exists():
-            return FileResponse(str(index_path), media_type='text/html')
+# ROOT ENDPOINT moved to top of file for deployment health check
     
     # Fallback si pas de fichiers - page d'erreur simple
     return HTMLResponse(content='''<!DOCTYPE html>
@@ -16161,11 +16155,7 @@ async def serve_root():
 </body>
 </html>''', status_code=200)
 
-# Health check at "/health" for Kubernetes liveness/readiness probes
-@app.get("/health")
-async def kubernetes_health_check():
-    """Health check endpoint for Kubernetes probes - MINIMAL for fast response"""
-    return {"status": "ok"}
+# Health check moved to top of file for faster deployment detection
 
 @app.get("/api/")
 async def api_health_check():
@@ -16296,11 +16286,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root endpoint for deployment health check
-@app.get("/")
-async def root_health():
-    """Root endpoint - returns simple OK for deployment checks"""
-    return {"status": "ok"}
+# Root health check moved to top of file
 
 logging.basicConfig(
     level=logging.INFO,
