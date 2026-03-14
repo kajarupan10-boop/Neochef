@@ -210,7 +210,9 @@ if not mongo_url:
 
 try:
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
-    db_name = os.environ.get('DB_NAME', 'mise_en_place')
+    db_name = os.environ.get('DB_NAME')
+    if not db_name:
+        raise ValueError("DB_NAME environment variable is required")
     db = client[db_name]
     print(f"[STARTUP] MongoDB connected to database: {db_name}")
 except Exception as e:
