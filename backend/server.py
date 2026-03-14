@@ -16497,12 +16497,15 @@ _keep_alive_task = None
 
 async def keep_preview_alive():
     """Background task to keep the app awake (self-ping)"""
+    # Wait 30 seconds before first ping to ensure app is fully ready
+    await asyncio.sleep(30)
+    
     # Use environment variable for the URL
     app_url = os.environ.get('APP_URL', os.environ.get('FRONTEND_URL', 'http://localhost:8001'))
     health_url = f"{app_url}/api/health"
     while True:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(health_url)
                 logging.info(f"[KEEP-ALIVE] Self ping: {response.status_code}")
         except Exception as e:
