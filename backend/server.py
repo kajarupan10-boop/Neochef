@@ -16164,8 +16164,8 @@ async def serve_root():
 # Health check at "/health" for Kubernetes liveness/readiness probes
 @app.get("/health")
 async def kubernetes_health_check():
-    """Health check endpoint for Kubernetes probes"""
-    return {"status": "ok", "app": "RestoPilot", "version": "2.1"}
+    """Health check endpoint for Kubernetes probes - MINIMAL for fast response"""
+    return {"status": "ok"}
 
 @app.get("/api/")
 async def api_health_check():
