@@ -318,13 +318,25 @@ if not FRONTEND_URL:
 # Create the main app
 app = FastAPI()
 
-# CRITICAL: Health check endpoint - MUST be first for deployment
+# CRITICAL: Health check endpoints - MUST be first for deployment
 @app.get("/health")
-async def health():
+def health():
+    """Sync health check for fastest response"""
+    return {"status": "ok"}
+
+@app.get("/ready")
+def ready():
+    """Readiness probe endpoint"""
+    return {"status": "ready"}
+
+@app.get("/healthz")
+def healthz():
+    """Kubernetes-style health check"""
     return {"status": "ok"}
 
 @app.get("/")
-async def root():
+def root():
+    """Root endpoint"""
     return {"status": "ok"}
 
 api_router = APIRouter(prefix="/api")
