@@ -14,8 +14,9 @@ from datetime import datetime, timezone, timedelta
 import hashlib
 import secrets
 import base64
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+# SendGrid temporairement désactivé pour simplifier le déploiement
+# from sendgrid import SendGridAPIClient
+# from sendgrid.helpers.mail import Mail
 from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
@@ -1416,102 +1417,15 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 # ==================== PASSWORD RESET ENDPOINTS ====================
 
 async def send_password_reset_email(email: str, reset_token: str, user_name: str, restaurant_name: str):
-    """Send password reset email via SendGrid"""
-    if not SENDGRID_API_KEY:
-        logger.warning("SendGrid API key not configured, skipping email")
-        return False
-    
-    reset_link = f"{FRONTEND_URL}?reset_token={reset_token}"
-    
-    html_content = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background-color: #26252D; padding: 20px; text-align: center;">
-            <h1 style="color: #EAE6CA; margin: 0;">Mise en Place Pro</h1>
-        </div>
-        <div style="padding: 30px; background-color: #f9f9f9;">
-            <h2 style="color: #26252D;">Réinitialisation de mot de passe</h2>
-            <p>Bonjour <strong>{user_name}</strong>,</p>
-            <p>Vous avez demandé la réinitialisation de votre mot de passe pour votre compte <strong>{restaurant_name}</strong>.</p>
-            <p>Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{reset_link}" style="background-color: #26252D; color: #EAE6CA; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                    Réinitialiser mon mot de passe
-                </a>
-            </div>
-            <p style="color: #666; font-size: 14px;">Ce lien expirera dans 1 heure.</p>
-            <p style="color: #666; font-size: 14px;">Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>
-        </div>
-        <div style="text-align: center; padding: 20px; color: #888; font-size: 12px;">
-            <p>© 2026 Mise en Place Pro - Gestion des tâches cuisine</p>
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Use a verified sender email from SendGrid
-    from_email = os.environ.get('SENDGRID_FROM_EMAIL', 'kajarupan10@gmail.com')
-    
-    message = Mail(
-        from_email=from_email,
-        to_emails=email,
-        subject=f"Réinitialisation de mot de passe - {restaurant_name}",
-        html_content=html_content
-    )
-    
-    try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        logger.info(f"Password reset email sent to {email}, status: {response.status_code}")
-        return response.status_code == 202
-    except Exception as e:
-        logger.error(f"Failed to send password reset email: {e}")
-        return False
+    """Send password reset email via SendGrid - TEMPORARILY DISABLED"""
+    logger.info("[EMAIL] SendGrid email functionality temporarily disabled")
+    return False
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
-    """Request a password reset email"""
-    # Find user by email
-    user_doc = await users_collection.find_one({"email": request.email}, {"_id": 0})
-    
-    # Always return success to prevent email enumeration attacks
-    if not user_doc:
-        return {"message": "Si un compte existe avec cette adresse email, un lien de réinitialisation a été envoyé."}
-    
-    # Get restaurant info (if user has a restaurant)
-    restaurant_name = "NeoChef"
-    if user_doc.get("restaurant_id"):
-        restaurant_doc = await restaurants_collection.find_one(
-            {"restaurant_id": user_doc["restaurant_id"]},
-            {"_id": 0, "name": 1}
-        )
-        if restaurant_doc:
-            restaurant_name = restaurant_doc.get("name", "NeoChef")
-    
-    # Generate reset token
-    reset_token = secrets.token_urlsafe(32)
-    
-    # Store reset request (expire in 1 hour)
-    await password_reset_collection.delete_many({"user_id": user_doc["user_id"]})  # Remove old requests
-    await password_reset_collection.insert_one({
-        "reset_id": f"reset_{uuid.uuid4().hex[:12]}",
-        "user_id": user_doc["user_id"],
-        "email": request.email,
-        "token": reset_token,
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        "created_at": datetime.now(timezone.utc),
-        "used": False
-    })
-    
-    # Send email
-    await send_password_reset_email(
-        request.email,
-        reset_token,
-        user_doc.get("name", "Utilisateur"),
-        restaurant_name
-    )
-    
-    return {"message": "Si un compte existe avec cette adresse email, un lien de réinitialisation a été envoyé."}
+    """Request a password reset email - TEMPORARILY DISABLED"""
+    # Fonctionnalité temporairement désactivée pour simplifier le déploiement
+    return {"message": "Cette fonctionnalité est temporairement désactivée. Contactez l'administrateur pour réinitialiser votre mot de passe."}
 
 @api_router.post("/auth/reset-password-with-token")
 async def reset_password_with_token(request: ResetPasswordWithTokenRequest):
