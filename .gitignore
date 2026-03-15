@@ -26,12 +26,9 @@ next-env.d.ts
 *.tsbuildinfo
 
 # Production builds
-/build
 dist/
-dist
 
-# Environment files (comprehensive coverage)
-
+# Credentials (but NOT .env files - they are required for deployment)
 *token.json*
 *credentials.json*
 
@@ -76,62 +73,6 @@ agenthub/agents/youtube/db
 # Build caches
 .cache/
 
-# Mobile development
-android-sdk/ temp_clone/.git/objects/pack/pack-999dbe0868fd1e3776fd0ef6fa875f1216b0d451.pack
+# Test reports
+/app/test_reports/
 temp_clone/.git/objects/pack/pack-999dbe0868fd1e3776fd0ef6fa875f1216b0d451.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
