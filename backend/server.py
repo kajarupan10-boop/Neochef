@@ -2016,16 +2016,21 @@ Do not add numbers, bullets, or any extra formatting."""
 
 @api_router.get("/restaurants/my-restaurants")
 async def get_my_restaurants(current_user: dict = Depends(get_current_user)):
-    """Liste tous les restaurants auxquels le gérant a accès"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Seuls les gérants peuvent accéder à plusieurs restaurants")
-    
+    """Liste tous les restaurants auxquels l'utilisateur a accès (admin ou staff avec multi-restaurants)"""
     # Récupérer la liste des restaurant_ids de l'utilisateur
-    restaurant_ids = current_user.get("restaurant_ids", [current_user["restaurant_id"]])
+    restaurant_ids = current_user.get("restaurant_ids", [])
     
-    # Si pas encore de liste, créer une liste avec le restaurant actuel
+    # Ajouter le restaurant_id actuel s'il n'est pas dans la liste
+    current_rid = current_user.get("restaurant_id")
+    if current_rid and current_rid not in restaurant_ids:
+        restaurant_ids.append(current_rid)
+    
+    # Si pas de restaurants, retourner une liste vide
     if not restaurant_ids:
-        restaurant_ids = [current_user["restaurant_id"]]
+        return {
+            "restaurants": [],
+            "current_restaurant_id": current_user.get("restaurant_id")
+        }
     
     # Récupérer les informations de tous les restaurants
     restaurants = await restaurants_collection.find(
@@ -2035,7 +2040,7 @@ async def get_my_restaurants(current_user: dict = Depends(get_current_user)):
     
     return {
         "restaurants": restaurants,
-        "current_restaurant_id": current_user["restaurant_id"]
+        "current_restaurant_id": current_user.get("restaurant_id")
     }
 
 @api_router.post("/restaurants/create")
@@ -2622,6 +2627,87 @@ async def reset_user_password(
     await sessions_collection.delete_many({"user_id": user_id})
     
     return {"message": "Password reset successfully"}
+
+
+# ============ ENDPOINT DE CORRECTION DES DONNÉES STAFF ============
+class FixStaffDataRequest(BaseModel):
+    email: str
+    restaurant_ids: List[str]
+    detailed_permissions: Optional[dict] = None
+
+@api_router.post("/admin/fix-staff-data")
+async def fix_staff_data(
+    request: FixStaffDataRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Corriger les données d'un utilisateur staff (admin only)"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Trouver l'utilisateur staff par email
+    staff_user = await users_collection.find_one({"email": request.email})
+    if not staff_user:
+        raise HTTPException(status_code=404, detail=f"Utilisateur {request.email} non trouvé")
+    
+    # Préparer les données de mise à jour
+    update_data = {
+        "restaurant_ids": request.restaurant_ids,
+        "restaurant_id": request.restaurant_ids[0] if request.restaurant_ids else staff_user.get("restaurant_id")
+    }
+    
+    if request.detailed_permissions:
+        update_data["detailed_permissions"] = request.detailed_permissions
+    
+    # Mettre à jour l'utilisateur
+    result = await users_collection.update_one(
+        {"email": request.email},
+        {"$set": update_data}
+    )
+    
+    # Récupérer l'utilisateur mis à jour
+    updated_user = await users_collection.find_one(
+        {"email": request.email},
+        {"_id": 0, "password_hash": 0}
+    )
+    
+    return {
+        "message": f"Données corrigées pour {request.email}",
+        "modified_count": result.modified_count,
+        "user": updated_user
+    }
+
+@api_router.get("/admin/user-debug/{email}")
+async def debug_user_data(
+    email: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Voir les données complètes d'un utilisateur (admin only)"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = await users_collection.find_one({"email": email}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"Utilisateur {email} non trouvé")
+    
+    # Récupérer les infos des restaurants auxquels il a accès
+    restaurant_ids = user.get("restaurant_ids", [])
+    if user.get("restaurant_id") and user["restaurant_id"] not in restaurant_ids:
+        restaurant_ids.append(user["restaurant_id"])
+    
+    restaurants = []
+    if restaurant_ids:
+        restaurants = await restaurants_collection.find(
+            {"restaurant_id": {"$in": restaurant_ids}},
+            {"_id": 0, "restaurant_id": 1, "name": 1}
+        ).to_list(100)
+    
+    return {
+        "user": user,
+        "accessible_restaurants": restaurants,
+        "current_restaurant_id": user.get("restaurant_id"),
+        "restaurant_ids_count": len(restaurant_ids)
+    }
+
 
 class ChangeEmailRequest(BaseModel):
     new_email: str
@@ -14285,6 +14371,20 @@ def has_event_access(user: dict, permission_level: str = "admin") -> bool:
     """Vérifier si l'utilisateur a accès au module événements"""
     if user.get("role") in ["admin", "manager"]:
         return True
+    
+    # Check new detailed_permissions system first
+    dp = user.get("detailed_permissions", {})
+    evenement_perms = dp.get("evenement", {}) or dp.get("evenements", {}) or dp.get("events", {})
+    if evenement_perms.get("actif") == True:
+        if permission_level == "admin":
+            # Check if user can modify events
+            return evenement_perms.get("modifier", False) or evenement_perms.get("ajouter", False)
+        elif permission_level == "read_only":
+            return True  # actif=true means at least read access
+        elif permission_level == "task_status_only":
+            return True
+    
+    # Fallback to old permission system
     event_permission = user.get("permissions", {}).get("events", "none")
     if permission_level == "admin":
         return event_permission == "admin"
