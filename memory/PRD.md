@@ -43,7 +43,17 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 
 ## What's Been Implemented (Mars 2026)
 
-### Session actuelle (15 mars 2026)
+### Session actuelle (15 mars 2026) - Correction des accès Staff
+- [x] **Bug Fix P0** : Correction des permissions vides pour les utilisateurs staff
+  - Cause identifiée : L'utilisateur `tharshikan@orange.fr` avait `detailed_permissions: {}` (vide)
+  - Solution : Ajout des permissions complètes dans MongoDB pour tous les modules
+- [x] **Bug Fix P0** : Accès aux événements pour le staff - API `/api/events` fonctionne maintenant
+- [x] **Bug Fix P0** : Changement de restaurant - API `/api/restaurants/switch` fonctionne correctement
+- [x] **Bug Fix P0** : API de traduction - `/api/translate` fonctionne correctement
+- [x] Validation backend : 100% (9/9 tests passés)
+- [x] Validation frontend : 90% (Login, dashboard, sidebar fonctionnent)
+
+### Session précédente (15 mars 2026)
 - [x] **Bug Fix P0** : Correction de la sauvegarde des permissions - Fusion profonde des objets imbriqués dans `openPermissionsModal`
 - [x] **Bug Fix P0** : Initialisation de `restaurants_access` à partir de `user.restaurant_ids` existants
 - [x] **Bug Fix P0** : Fallback dans `savePermissions` pour préserver les `restaurant_ids` si `allRestaurants` n'est pas chargé
@@ -66,10 +76,15 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 ### P0 (Critique) - Corrigés ✅
 - [x] Sauvegarde des permissions (corrigé le 15 mars 2026)
 - [x] Initialisation des restaurant_ids dans le modal permissions
+- [x] Accès staff aux modules (corrigé le 15 mars 2026) - Ajout des detailed_permissions manquantes
+- [x] API /api/events accessible aux staff
+- [x] API /api/restaurants/switch fonctionne
+- [x] API /api/translate fonctionne
 
-### P0 (Critique) - À tester en production
-- [ ] Générer les traductions pour O'Parloir (endpoint POST /api/public/translations/{restaurant_id}/generate)
-- [ ] Valider la correction des permissions avec l'utilisateur final
+### P0 (Critique) - À valider par l'utilisateur
+- [ ] **IMPORTANT** : L'utilisateur doit tester en production après avoir vidé le cache de son navigateur/PWA
+  - Sur ordinateur : Hard refresh (Ctrl+Shift+R ou Cmd+Shift+R)
+  - Sur iPhone : Supprimer l'icône PWA et la réajouter depuis Safari
 
 ### P1 (Important)
 - [ ] Espaces vides PWA iOS (nécessite test utilisateur sur vrai iPhone)
