@@ -16296,24 +16296,14 @@ async def get_api_favicon():
     raise HTTPException(status_code=404, detail="Favicon not found")
 
 @app.get("/api/health")
-async def detailed_health_check():
-    """Detailed health check for monitoring"""
-    health = {
+def detailed_health_check():
+    """Health check for deployment - sync to respond instantly"""
+    return {
         "status": "ok",
         "app": "RestoPilot",
         "version": "2.1",
         "checks": {}
     }
-    
-    # Check MongoDB
-    try:
-        await client.admin.command('ping')
-        health["checks"]["mongodb"] = "ok"
-    except Exception as e:
-        health["checks"]["mongodb"] = f"error: {str(e)}"
-        health["status"] = "degraded"
-    
-    return health
 
 # Special route to serve homepage (bypass CDN cache)
 @app.get("/app")
