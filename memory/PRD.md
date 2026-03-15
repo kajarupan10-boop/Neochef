@@ -43,7 +43,13 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 
 ## What's Been Implemented (Mars 2026)
 
-### Session actuelle (15 mars 2026) - Correction des accès Staff
+### Session actuelle (15 mars 2026) - Correction finale
+- [x] **Bug Fix CRITICAL** : Page "Équipe" affichait un écran vide
+  - Cause : Références à `users.map()` et `u.assigned_categories.length` sans vérification null
+  - Solution : Ajout de `(users || [])` et `(u.assigned_categories || [])` pour éviter les crashs
+- [x] **Nouvelle fonctionnalité** : Bouton "Donner tous les accès"
+  - Backend : `POST /api/users/{user_id}/grant-full-access` - Active tous les modules pour un staff
+  - Frontend : Nouveau bouton vert dans le menu d'actions de chaque staff
 - [x] **Bug Fix P0** : Correction des permissions vides pour les utilisateurs staff
   - Cause identifiée : L'utilisateur `tharshikan@orange.fr` avait `detailed_permissions: {}` (vide)
   - Solution : Ajout des permissions complètes dans MongoDB pour tous les modules
