@@ -487,10 +487,16 @@ class DetailedUserPermissions(BaseModel):
     parametres: bool = False
     equipe: bool = False
     
+    # Accès restaurants
+    restaurants_access: Optional[Dict[str, Any]] = None
+    
     # Modules avec sous-permissions
     taches: TachesPermissions = TachesPermissions()
     preparation_commande: PrepCommandePermissions = PrepCommandePermissions()
     menu_restaurant: MenuRestaurantPermissions = MenuRestaurantPermissions()
+    menu_restaurant_en_cours: Optional[Dict[str, Any]] = None  # Menu brouillon
+    menu_client: Optional[Dict[str, Any]] = None  # Menu Client
+    prestataires: Optional[Dict[str, Any]] = None  # Prestataires
     fiche_technique: FicheTechniquePermissions = FicheTechniquePermissions()
     menu_groupe: MenuGroupePermissions = MenuGroupePermissions()
     evenement: EvenementPermissions = EvenementPermissions()
