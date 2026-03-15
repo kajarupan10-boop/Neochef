@@ -533,6 +533,7 @@ class UpdateUserRequest(BaseModel):
     notification_prefs: Optional[Dict[str, bool]] = None
     role: Optional[str] = None
     detailed_permissions: Optional[DetailedUserPermissions] = None
+    restaurant_ids: Optional[List[str]] = None
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
