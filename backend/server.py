@@ -2541,6 +2541,11 @@ async def update_user(
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    # Vérifier que l'utilisateur existe
+    target_user = await users_collection.find_one({"user_id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
     update_data = {}
     for k, v in update_request.dict().items():
         if v is not None:
@@ -2550,10 +2555,11 @@ async def update_user(
                 update_data[k] = v
     
     if update_data:
-        await users_collection.update_one(
-            {"user_id": user_id, "restaurant_id": current_user["restaurant_id"]},
+        result = await users_collection.update_one(
+            {"user_id": user_id},
             {"$set": update_data}
         )
+        print(f"[UPDATE_USER] Updated {result.modified_count} documents for user {user_id}")
     
     user_doc = await users_collection.find_one(
         {"user_id": user_id},
@@ -2733,6 +2739,66 @@ async def update_user_permissions(
     return {
         "message": "Permissions updated successfully",
         "user": updated_user
+    }
+
+@api_router.put("/users/{user_id}/detailed-permissions")
+async def update_user_detailed_permissions(
+    user_id: str,
+    permissions: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Mettre à jour les permissions détaillées d'un utilisateur"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Vérifier que l'utilisateur existe
+    target_user = await users_collection.find_one({"user_id": user_id})
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Mettre à jour les detailed_permissions
+    await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"detailed_permissions": permissions}}
+    )
+    
+    # Récupérer l'utilisateur mis à jour
+    updated_user = await users_collection.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "password_hash": 0}
+    )
+    
+    return {
+        "message": "Detailed permissions updated successfully",
+        "user": updated_user
+    }
+
+@api_router.put("/users/{user_id}/restaurant-access")
+async def update_user_restaurant_access(
+    user_id: str,
+    restaurant_ids: list = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Mettre à jour l'accès aux restaurants d'un utilisateur"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Vérifier que l'utilisateur existe
+    target_user = await users_collection.find_one({"user_id": user_id})
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Mettre à jour les restaurant_ids
+    await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"restaurant_ids": restaurant_ids}}
+    )
+    
+    return {
+        "message": "Restaurant access updated successfully",
+        "restaurant_ids": restaurant_ids
     }
 
 @api_router.get("/users/{user_id}/permissions")
