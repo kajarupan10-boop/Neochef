@@ -2907,6 +2907,55 @@ async def update_user_restaurant_access(
         "restaurant_ids": restaurant_ids
     }
 
+@api_router.post("/users/{user_id}/grant-full-access")
+async def grant_full_access_to_user(
+    user_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Donner tous les accès à un utilisateur staff - utilisé par l'admin pour activer rapidement tous les modules"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Vérifier que l'utilisateur existe
+    target_user = await users_collection.find_one({"user_id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Permissions complètes pour tous les modules
+    full_permissions = {
+        "restaurants_access": {"all": False, "restaurant_ids": target_user.get("restaurant_ids", [])},
+        "parametres": False,  # Généralement réservé à l'admin
+        "equipe": False,      # Généralement réservé à l'admin
+        "taches": {"actif": True, "categories": [], "editer": True, "ajouter": True, "supprimer": True, "modeles_ajouter": True, "modeles_modifier": True, "modeles_supprimer": True},
+        "preparation_commande": {"actif": True, "section": "tous", "fournisseur": {"ajouter": True, "modifier": True, "supprimer": True}, "produits": {"ajouter": True, "modifier": True, "supprimer": True}, "consignes": {"ajouter": True, "modifier": True, "supprimer": True}},
+        "menu_restaurant": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "lien_partage": True, "section": {"ajouter": True, "modifier": True, "supprimer": True}, "produits": {"ajouter": True, "modifier": True, "supprimer": True}, "export_pdf": True, "export_csv": True, "import_csv": True, "import_pdf": True, "note": True},
+        "menu_restaurant_en_cours": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True},
+        "menu_client": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True},
+        "prestataires": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "mode": "ecriture"},
+        "fiche_technique": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "section_access": "tous", "export_pdf_excel": True, "export_type": "tous", "analyse_marges": True, "section": {"ajouter": True, "modifier": True, "supprimer": True}, "produits": {"ajouter": True, "modifier": True, "supprimer": True}, "photo": {"ajouter": True, "supprimer": True}},
+        "menu_groupe": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "bouton_lien": True, "section": {"ajouter": True, "modifier": True, "supprimer": True}, "plats": {"ajouter": True, "modifier": True, "supprimer": True}, "reservation_creer": True, "reservation_modifier": True, "reservation_supprimer": True, "statut": True, "proposition": True, "facture": True},
+        "evenement": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "archiver": True, "prestataires": {"ajouter": True, "modifier": True, "supprimer": True}},
+        "facturation": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "facture_deposer": True, "facture_telecharger": True, "devis_deposer": True, "devis_telecharger": True},
+        "ardoise": {"actif": True, "visualiser": True, "modifier": True, "ajouter": True, "supprimer": True, "edition": {"acces": True, "mode": "ecriture"}, "ventes": {"acces": True, "mode": "ecriture"}, "rapports": {"acces": True, "mode": "ecriture", "export_pdf": True, "export_excel": True}, "menu": True, "pdf": True, "section": {"ajouter": True, "modifier": True, "supprimer": True}, "produits": {"ajouter": True, "modifier": True, "supprimer": True}, "packages_prix": {"ajouter": True, "modifier": True, "supprimer": True}},
+    }
+    
+    # Mettre à jour les permissions
+    await users_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"detailed_permissions": full_permissions}}
+    )
+    
+    # Récupérer l'utilisateur mis à jour
+    updated_user = await users_collection.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "password_hash": 0}
+    )
+    
+    return {
+        "message": f"Tous les accès ont été accordés à {target_user.get('name', target_user.get('email'))}",
+        "user": updated_user
+    }
+
 @api_router.get("/users/{user_id}/permissions")
 async def get_user_permissions(
     user_id: str,
