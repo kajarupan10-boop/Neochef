@@ -2317,12 +2317,17 @@ async def switch_restaurant(
     switch_request: SwitchRestaurantRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Changer le restaurant actif (uniquement pour les gérants)"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Seuls les gérants peuvent changer de restaurant")
+    """Changer le restaurant actif (pour les gérants et staff avec accès multi-restaurants)"""
+    # Vérifier que l'utilisateur a accès à plusieurs restaurants
+    restaurant_ids = current_user.get("restaurant_ids", [])
+    if not restaurant_ids:
+        restaurant_ids = [current_user.get("restaurant_id")] if current_user.get("restaurant_id") else []
     
-    # Vérifier que l'utilisateur a accès à ce restaurant
-    restaurant_ids = current_user.get("restaurant_ids", [current_user["restaurant_id"]])
+    # Si l'utilisateur n'est pas admin et n'a pas de restaurant_ids multiples, refuser
+    if current_user["role"] != "admin" and len(restaurant_ids) <= 1:
+        raise HTTPException(status_code=403, detail="Vous n'avez pas accès à plusieurs restaurants")
+    
+    # Vérifier que l'utilisateur a accès à ce restaurant spécifique
     if switch_request.restaurant_id not in restaurant_ids:
         raise HTTPException(status_code=403, detail="Vous n'avez pas accès à ce restaurant")
     
@@ -2560,6 +2565,14 @@ async def update_user(
                 update_data[k] = v
             elif k != "detailed_permissions":
                 update_data[k] = v
+    
+    # S'assurer que restaurant_id est défini si restaurant_ids est fourni
+    if "restaurant_ids" in update_data and update_data["restaurant_ids"]:
+        # Si restaurant_id n'est pas défini ou n'est pas dans restaurant_ids, le mettre au premier
+        current_restaurant_id = target_user.get("restaurant_id")
+        if not current_restaurant_id or current_restaurant_id not in update_data["restaurant_ids"]:
+            update_data["restaurant_id"] = update_data["restaurant_ids"][0]
+            print(f"[UPDATE_USER] Auto-setting restaurant_id to {update_data['restaurant_id']}")
     
     if update_data:
         result = await users_collection.update_one(
