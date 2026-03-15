@@ -103,7 +103,7 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 - Utilisateur standard: groupenaga@gmail.com / LeCercle123!
 
 ## URLs
-- Preview: https://neochef-bugfix.preview.emergentagent.com
+- Preview: https://neochef-cache-fix.preview.emergentagent.com
 - Production: À confirmer après déploiement
 
 ## Process de Build

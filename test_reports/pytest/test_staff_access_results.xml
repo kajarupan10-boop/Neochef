@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="10" time="5.427" timestamp="2026-03-15T23:13:30.607173+00:00" hostname="agent-env-6d789932-5234-4121-a09c-c35cc10ca9b2"><testcase classname="backend.tests.test_staff_access.TestHealthCheck" name="test_health_endpoint" time="0.283"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:976: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_staff_access.py:33: in test_health_endpoint
+    data = response.json()
+           ^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:980: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="backend.tests.test_staff_access.TestStaffLogin" name="test_staff_login_success" time="0.136" /><testcase classname="backend.tests.test_staff_access.TestStaffLogin" name="test_staff_has_detailed_permissions" time="0.179" /><testcase classname="backend.tests.test_staff_access.TestEventsAccess" name="test_events_list_access" time="0.261" /><testcase classname="backend.tests.test_staff_access.TestMenuRestaurantAccess" name="test_menu_restaurant_sections_list" time="0.293" /><testcase classname="backend.tests.test_staff_access.TestRestaurantSwitching" name="test_staff_has_multiple_restaurants" time="0.186" /><testcase classname="backend.tests.test_staff_access.TestRestaurantSwitching" name="test_restaurant_switch" time="0.287" /><testcase classname="backend.tests.test_staff_access.TestTranslationAPI" name="test_translate_endpoint" time="3.071" /><testcase classname="backend.tests.test_staff_access.TestFicheTechniqueAccess" name="test_fiche_products_list" time="0.317" /><testcase classname="backend.tests.test_staff_access.TestAdminLogin" name="test_admin_login_success" time="0.201" /></testsuite></testsuites>
