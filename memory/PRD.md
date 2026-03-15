@@ -43,17 +43,19 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 
 ## What's Been Implemented (Mars 2026)
 
-### Session actuelle
-- [x] Correction CSS pour les espaces vides sur PWA iOS (safe areas)
-- [x] Suppression des padding body problématiques
-- [x] Header avec paddingTop pour env(safe-area-inset-top)
-- [x] BottomNav avec paddingBottom pour env(safe-area-inset-bottom)
+### Session actuelle (15 mars 2026)
+- [x] **Bug Fix P0** : Correction de la sauvegarde des permissions - Fusion profonde des objets imbriqués dans `openPermissionsModal`
+- [x] **Bug Fix P0** : Initialisation de `restaurants_access` à partir de `user.restaurant_ids` existants
+- [x] **Bug Fix P0** : Fallback dans `savePermissions` pour préserver les `restaurant_ids` si `allRestaurants` n'est pas chargé
+- [x] Validation par testing agent : 100% des tests backend et frontend passés
+- [x] Suppression du code Super Admin et SendGrid pour simplifier l'application
 
 ### Sessions précédentes
-- [x] Back-office Super Admin complet
+- [x] Correction CSS pour les espaces vides sur PWA iOS (safe areas)
+- [x] Back-office Super Admin (supprimé depuis)
 - [x] Module Prestataires (CRUD)
 - [x] Notification de mise à jour PWA
-- [x] Correction bug réinitialisation mot de passe SendGrid
+- [x] Correction bug réinitialisation mot de passe SendGrid (supprimé depuis)
 - [x] Correction suppression éléments menu brouillon
 - [x] Correction UI écran "Équipe" avec menu déroulant
 - [x] Système de permissions Ardoise
@@ -61,17 +63,25 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 
 ## Prioritized Backlog
 
-### P0 (Critique) - En cours
-- [ ] Validation correction espaces vides PWA iOS (nécessite test utilisateur sur vrai iPhone)
+### P0 (Critique) - Corrigés ✅
+- [x] Sauvegarde des permissions (corrigé le 15 mars 2026)
+- [x] Initialisation des restaurant_ids dans le modal permissions
+
+### P0 (Critique) - À tester en production
+- [ ] Générer les traductions pour O'Parloir (endpoint POST /api/public/translations/{restaurant_id}/generate)
+- [ ] Valider la correction des permissions avec l'utilisateur final
 
 ### P1 (Important)
+- [ ] Espaces vides PWA iOS (nécessite test utilisateur sur vrai iPhone)
 - [ ] Aperçu PDF blanc sur iOS - explorer solution react-pdf
 - [ ] Refactoring server.py et index.tsx (monolithes > 10k lignes)
+- [ ] Fiabilité des mises à jour PWA (service worker)
 
 ### P2 (Normal)
 - [ ] Permission pour bouton "Publier" du menu brouillon
 - [ ] Intégration sélection prestataires dans écran Événements
-- [ ] Export planning ardoises et vérification traductions
+- [ ] Export planning ardoises
+- [ ] Réactiver la réinitialisation de mot de passe par email
 
 ### P3 (Nice to have)
 - [ ] Automatiser process de build/déploiement
