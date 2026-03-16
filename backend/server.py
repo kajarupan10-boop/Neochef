@@ -2317,6 +2317,34 @@ async def duplicate_restaurant(
         }
     }
 
+class ChangeOwnPasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.post("/auth/change-password")
+async def change_own_password(
+    request: ChangeOwnPasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Changer son propre mot de passe (pour tous les utilisateurs connectés)"""
+    # Vérifier le mot de passe actuel
+    user_doc = await users_collection.find_one({"user_id": current_user["user_id"]}, {"_id": 0})
+    if not user_doc or not verify_password(request.current_password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Mot de passe actuel incorrect")
+    
+    # Vérifier la longueur du nouveau mot de passe
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
+    
+    # Mettre à jour le mot de passe
+    new_hash = hash_password(request.new_password)
+    await users_collection.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    return {"message": "Mot de passe modifié avec succès"}
+
 @api_router.post("/restaurants/switch")
 async def switch_restaurant(
     switch_request: SwitchRestaurantRequest,
@@ -5262,8 +5290,13 @@ async def create_group_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Créer une réservation de groupe"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_creer
+    has_permission = (
+        current_user["role"] == "admin" or 
+        current_user.get("detailed_permissions", {}).get("menu_groupe", {}).get("reservation_creer", False)
+    )
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Permission requise pour créer une réservation de groupe")
     
     # Déterminer si un menu est sélectionné
     has_menu = bool(create_request.selected_sections and len(create_request.selected_sections) > 0)
@@ -5466,8 +5499,13 @@ async def delete_group_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Marquer une réservation comme supprimée (soft delete)"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_supprimer
+    has_permission = (
+        current_user["role"] == "admin" or 
+        current_user.get("detailed_permissions", {}).get("menu_groupe", {}).get("reservation_supprimer", False)
+    )
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Permission requise pour supprimer une réservation de groupe")
     
     result = await group_reservations_collection.update_one(
         {"reservation_id": reservation_id, "restaurant_id": current_user["restaurant_id"]},
@@ -5486,8 +5524,13 @@ async def update_group_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Modifier une réservation de groupe (même après validation client)"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_modifier
+    has_permission = (
+        current_user["role"] == "admin" or 
+        current_user.get("detailed_permissions", {}).get("menu_groupe", {}).get("reservation_modifier", False)
+    )
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Permission requise pour modifier une réservation de groupe")
     
     # Vérifier que la réservation existe
     existing = await group_reservations_collection.find_one(
