@@ -16,120 +16,130 @@ Migration d'une application PWA existante nommée "NeoChef" pour la gestion de r
 
 ## Core Features
 
-### 1. Back-Office Super Admin
-- Tableau de bord avec vue sur tous les restaurants et utilisateurs
-- Création de nouveaux comptes restaurants
-- Réinitialisation manuelle des mots de passe utilisateurs
-- Accès via login spécial `superadmin`
-
-### 2. Système de Permissions Granulaires
+### 1. Système de Permissions Granulaires
 - Contrôle d'accès en lecture/écriture aux différents modules
-- Permission spécifique pour le bouton "Publier" du menu brouillon (à implémenter)
-- 3 sections pour le module Ardoise: Édition, Ventes, Rapports
+- Menu Restaurant (final) = lecture seule pour staff
+- Menu Restaurant en cours = édition complète pour staff
+- Fiche Technique = permissions granulaires (sections, produits, photos)
+- Permission spécifique pour le bouton "Publier" du menu brouillon
 
-### 3. Système de Menu Brouillon
+### 2. Système de Menu Brouillon
 - Environnement de test "Menu en cours" pour modifications sans affecter le menu public
 - Bouton "Publier" pour appliquer les changements au menu public
-- Initialisation automatique du menu brouillon
+- Staff peut éditer le menu en cours mais pas le menu final
 
-### 4. Gestion des Prestataires
-- CRUD complet pour la gestion des prestataires
-- Intégration avec le module Événements (à compléter)
+### 3. Fiche Technique
+- Gestion des sections (Bar, Cuisine)
+- Gestion des produits avec ingrédients
+- Analyse des marges
+- Export PDF/Excel
+- Permissions granulaires pour ajouter/modifier/supprimer sections et produits
+
+### 4. Menu Groupe
+- Gestion des réservations de groupe
+- Sections et items personnalisables
+- Génération de factures
 
 ### 5. PWA
 - Notification de mise à jour pour informer les utilisateurs
 - Service Worker pour le cache et fonctionnement hors-ligne
-- Support iOS avec gestion des safe areas (encoche/home indicator)
+- Support iOS avec gestion des safe areas
 
-## What's Been Implemented (Mars 2026)
+## What's Been Implemented
 
-### Session actuelle (15 mars 2026) - Correction finale
-- [x] **Bug Fix CRITICAL** : Page "Équipe" affichait un écran vide
-  - Cause : Références à `users.map()` et `u.assigned_categories.length` sans vérification null
-  - Solution : Ajout de `(users || [])` et `(u.assigned_categories || [])` pour éviter les crashs
-- [x] **Nouvelle fonctionnalité** : Bouton "Donner tous les accès"
-  - Backend : `POST /api/users/{user_id}/grant-full-access` - Active tous les modules pour un staff
-  - Frontend : Nouveau bouton vert dans le menu d'actions de chaque staff
-- [x] **Bug Fix P0** : Correction des permissions vides pour les utilisateurs staff
-  - Cause identifiée : L'utilisateur `tharshikan@orange.fr` avait `detailed_permissions: {}` (vide)
-  - Solution : Ajout des permissions complètes dans MongoDB pour tous les modules
-- [x] **Bug Fix P0** : Accès aux événements pour le staff - API `/api/events` fonctionne maintenant
-- [x] **Bug Fix P0** : Changement de restaurant - API `/api/restaurants/switch` fonctionne correctement
-- [x] **Bug Fix P0** : API de traduction - `/api/translate` fonctionne correctement
-- [x] Validation backend : 100% (9/9 tests passés)
-- [x] Validation frontend : 90% (Login, dashboard, sidebar fonctionnent)
+### Session 16 mars 2026 - Corrections majeures des permissions
 
-### Session précédente (15 mars 2026)
-- [x] **Bug Fix P0** : Correction de la sauvegarde des permissions - Fusion profonde des objets imbriqués dans `openPermissionsModal`
-- [x] **Bug Fix P0** : Initialisation de `restaurants_access` à partir de `user.restaurant_ids` existants
-- [x] **Bug Fix P0** : Fallback dans `savePermissions` pour préserver les `restaurant_ids` si `allRestaurants` n'est pas chargé
-- [x] Validation par testing agent : 100% des tests backend et frontend passés
-- [x] Suppression du code Super Admin et SendGrid pour simplifier l'application
+#### Corrections Frontend (Fiche Technique)
+- [x] **Bug Fix CRITICAL** : Page "Fiche Technique" affichait une page blanche
+  - Cause : Fonction `canEditFicheTechnique()` non définie dans le composant
+  - Solution : Ajout de la fonction dans FicheTechniqueScreen
 
-### Sessions précédentes
-- [x] Correction CSS pour les espaces vides sur PWA iOS (safe areas)
-- [x] Back-office Super Admin (supprimé depuis)
-- [x] Module Prestataires (CRUD)
-- [x] Notification de mise à jour PWA
-- [x] Correction bug réinitialisation mot de passe SendGrid (supprimé depuis)
-- [x] Correction suppression éléments menu brouillon
-- [x] Correction UI écran "Équipe" avec menu déroulant
-- [x] Système de permissions Ardoise
-- [x] Déploiement en production avec script initialisation
+- [x] **Bug Fix CRITICAL** : Boutons d'édition non visibles pour staff avec permissions
+  - Cause : Utilisation de `isManager` au lieu des permissions détaillées
+  - Solution : Remplacement par `canAddSection`, `canEditSection`, `canDeleteSection`, `canAddProduct`, `canEditProduct`, `canDeleteProduct`
+
+- [x] **Amélioration** : Permissions utilisées pour conditionner les boutons :
+  - Vue détail produit : bouton ✏️, colonnes de prix
+  - Vue liste sections : boutons +, ✏️, 🗑️
+  - Vue liste produits : boutons ✏️, 🗑️
+  - Bouton "+ Ajouter une section"
+
+#### Corrections Frontend (Menu Restaurant)
+- [x] **Bug Fix** : Menu Restaurant final toujours en lecture seule pour staff
+  - Même si permissions accordées, le menu final n'est modifiable que par admin
+  
+- [x] **Bug Fix** : Menu Restaurant en cours avec édition complète pour staff
+  - Staff avec accès = tous les boutons d'édition (+, ✏️, 🗑️) sur sections et produits
+
+#### Corrections Frontend (Divers)
+- [x] **Bug Fix** : Bouton "Modifier mot de passe" non visible pour staff
+  - Cause : Couleur du texte non définie
+  - Solution : Ajout de `color: secondaryColor` et `data-testid`
+
+- [x] **Bug Fix** : Réservations Menu Groupe non affichées
+  - Cause : Données non rechargées à l'entrée dans l'écran
+  - Solution : Ajout d'un `useEffect` pour charger les réservations au montage
+
+- [x] **Bug Fix** : Normalisation de `section_access` pour Fiche Technique
+  - Support de 'tous', 'all' et 'both'
+
+#### Corrections Backend
+- [x] API `/api/group-reservations/list` fonctionne pour admin
+- [x] API `/api/users/{user_id}/detailed-permissions` sauvegarde correctement les permissions
+
+### Session 15 mars 2026
+- [x] Bug Fix : Page "Équipe" affichait un écran vide
+- [x] Nouvelle fonctionnalité : Bouton "Donner tous les accès"
+- [x] Bug Fix : Permissions vides pour les utilisateurs staff
+- [x] Bug Fix : Accès aux événements pour le staff
+- [x] Bug Fix : Changement de restaurant
+- [x] Bug Fix : API de traduction
 
 ## Prioritized Backlog
 
 ### P0 (Critique) - Corrigés ✅
-- [x] Sauvegarde des permissions (corrigé le 15 mars 2026)
-- [x] Initialisation des restaurant_ids dans le modal permissions
-- [x] Accès staff aux modules (corrigé le 15 mars 2026) - Ajout des detailed_permissions manquantes
-- [x] API /api/events accessible aux staff
-- [x] API /api/restaurants/switch fonctionne
-- [x] API /api/translate fonctionne
+- [x] Fiche Technique page blanche
+- [x] Boutons d'édition non visibles pour staff avec permissions
+- [x] Menu Restaurant lecture seule pour staff
+- [x] Menu Restaurant en cours éditable pour staff
+- [x] Bouton "Modifier mot de passe" pour staff
+- [x] Réservations Menu Groupe non affichées
 
-### P0 (Critique) - À valider par l'utilisateur
-- [ ] **IMPORTANT** : L'utilisateur doit tester en production après avoir vidé le cache de son navigateur/PWA
-  - Sur ordinateur : Hard refresh (Ctrl+Shift+R ou Cmd+Shift+R)
-  - Sur iPhone : Supprimer l'icône PWA et la réajouter depuis Safari
+### P1 (Important) - À surveiller
+- [ ] Vérifier que les permissions sont correctement sauvegardées via l'interface
+- [ ] Traduction en production (vérifier EMERGENT_LLM_KEY)
 
-### P1 (Important)
-- [ ] Espaces vides PWA iOS (nécessite test utilisateur sur vrai iPhone)
-- [ ] Aperçu PDF blanc sur iOS - explorer solution react-pdf
-- [ ] Refactoring server.py et index.tsx (monolithes > 10k lignes)
-- [ ] Fiabilité des mises à jour PWA (service worker)
+### P2 (Améliorations)
+- [ ] Espaces vides PWA iOS
+- [ ] Aperçu PDF blanc sur iOS
+- [ ] Refactoring server.py et index.tsx (monolithes)
+- [ ] Bouton "Retour" menu client sur iOS
 
-### P2 (Normal)
-- [ ] Permission pour bouton "Publier" du menu brouillon
-- [ ] Intégration sélection prestataires dans écran Événements
-- [ ] Export planning ardoises
-- [ ] Réactiver la réinitialisation de mot de passe par email
+## Architecture
 
-### P3 (Nice to have)
-- [ ] Automatiser process de build/déploiement
+### Backend
+- `/app/backend/server.py` - API FastAPI (monolithe ~16k lignes)
+- `/app/backend/.env` - Configuration (MONGO_URL, EMERGENT_LLM_KEY)
 
-## Key Files
-- `/app/backend/server.py` - Backend FastAPI monolithique (~13k lignes)
-- `/app/temp_clone/frontend/app/index.tsx` - Frontend React monolithique (~24k lignes)
-- `/app/frontend/build/index.html` - HTML généré avec CSS safe area corrigé
-- `/app/frontend/build/sw.js` - Service Worker pour PWA
+### Frontend
+- `/app/temp_clone/frontend/app/index.tsx` - Application React/Expo (monolithe ~24k lignes)
+- `/app/frontend/build/` - Build statique servi par Nginx
+- `/app/frontend/.env` - Configuration (REACT_APP_BACKEND_URL)
 
-## Database Schema
-- `users`: { _id, email, password, role: 'admin'|'staff'|'superadmin', restaurants }
-- `mep_restaurants`: { _id, name, share_token, primary_color, secondary_color }
-- `prestataires`: { _id, restaurant_id, name, contact, email, phone, speciality }
-- `ardoise_items`, `ardoise_sales_history`, `planned_ardoises`
+### Key Endpoints
+- `POST /api/auth/login` - Connexion
+- `POST /api/auth/change-password` - Changement mot de passe
+- `PUT /api/users/{user_id}` - Mise à jour utilisateur
+- `PUT /api/users/{user_id}/detailed-permissions` - Mise à jour permissions
+- `GET /api/group-reservations/list` - Liste des réservations groupe
+- `GET /api/fiche-sections/list` - Liste des sections Fiche Technique
+- `GET /api/fiche-products/list` - Liste des produits Fiche Technique
 
-## Test Credentials
-- Super Admin: neochef.fr@gmail.com / Kajan1012
-- Utilisateur standard: groupenaga@gmail.com / LeCercle123!
+## Credentials (Preview)
+- Admin: `groupenaga@gmail.com` / `LeCercle123!`
+- Staff: `tharshikan@orange.fr` / `Kajan1012`
 
-## URLs
-- Preview: https://perms-debug.preview.emergentagent.com
-- Production: À confirmer après déploiement
-
-## Process de Build
-1. Modifier dans `/app/temp_clone/frontend/`
-2. Exécuter `yarn expo export --platform web`
-3. Copier `/app/temp_clone/frontend/dist/*` vers `/app/frontend/build/`
-4. Corriger CSS safe area dans index.html si nécessaire
-5. Redémarrer frontend: `sudo supervisorctl restart frontend`
+## Notes pour le déploiement
+1. Après déploiement, re-sauvegarder les permissions des utilisateurs staff via l'interface
+2. Vérifier la variable EMERGENT_LLM_KEY en production pour la traduction
+3. Demander aux utilisateurs de vider leur cache PWA après mise à jour
