@@ -41,7 +41,7 @@ INFO:     Started server process [3566]
 INFO:     Waiting for application startup.
 2026-03-11 13:57:03,811 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 13:57:04,065 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 13:57:04,065 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 13:57:04,065 - root - INFO - [KEEP-ALIVE] Self ping: 404
 WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
 INFO:     Shutting down
@@ -53,7 +53,7 @@ INFO:     Started server process [3593]
 INFO:     Waiting for application startup.
 2026-03-11 13:57:15,566 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 13:57:15,721 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 13:57:15,721 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 13:57:15,722 - root - INFO - [KEEP-ALIVE] Self ping: 404
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
@@ -68,35 +68,35 @@ INFO:     Started server process [3920]
 INFO:     Waiting for application startup.
 2026-03-11 13:58:50,272 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 13:58:50,506 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 13:58:50,506 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 13:58:50,506 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:03:50,838 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:03:50,838 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:03:50,838 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:08:51,075 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:08:51,075 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:08:51,076 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:13:51,341 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:13:51,341 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:13:51,342 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:18:51,591 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:18:51,591 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:18:51,591 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:23:51,825 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:23:51,825 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:23:51,826 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:28:52,120 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:28:52,120 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:28:52,120 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:33:52,384 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:33:52,384 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:33:52,384 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:38:52,628 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:38:52,628 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:38:52,628 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:43:52,928 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:43:52,928 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:43:52,929 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:48:53,248 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:48:53,248 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:48:53,249 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:53:53,503 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:53:53,503 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:53:53,504 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 14:58:53,747 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 14:58:53,747 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 14:58:53,748 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 15:03:53,966 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 15:03:53,966 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 15:03:53,966 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 15:08:54,221 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 15:08:54,221 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 15:08:54,221 - root - INFO - [KEEP-ALIVE] Self ping: 404
 INFO:     Will watch for changes in these directories: ['/app/backend']
 INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
@@ -105,7 +105,7 @@ INFO:     Started server process [88]
 INFO:     Waiting for application startup.
 2026-03-11 16:38:43,382 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 16:38:43,743 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:38:43,743 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:38:43,744 - root - INFO - [KEEP-ALIVE] Self ping: 404
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
@@ -120,13 +120,13 @@ INFO:     Started server process [166]
 INFO:     Waiting for application startup.
 2026-03-11 16:42:16,894 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 16:42:17,285 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:42:17,285 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:42:17,285 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 16:47:17,602 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:47:17,602 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:47:17,603 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 16:52:17,958 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:52:17,958 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:52:17,959 - root - INFO - [KEEP-ALIVE] Self ping: 404
-2026-03-11 16:57:18,478 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:57:18,478 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:57:18,479 - root - INFO - [KEEP-ALIVE] Self ping: 404
 INFO:     Will watch for changes in these directories: ['/app/backend']
 INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
@@ -135,7 +135,7 @@ INFO:     Started server process [88]
 INFO:     Waiting for application startup.
 2026-03-11 16:59:14,086 - root - INFO - [KEEP-ALIVE] Background task started - app will stay awake
 INFO:     Application startup complete.
-2026-03-11 16:59:14,429 - httpx - INFO - HTTP Request: GET https://neochef-cache-fix.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
+2026-03-11 16:59:14,429 - httpx - INFO - HTTP Request: GET https://perms-debug.preview.emergentagent.com/api/health "HTTP/1.1 404 Not Found"
 2026-03-11 16:59:14,430 - root - INFO - [KEEP-ALIVE] Self ping: 404
 
 ==> /var/log/supervisor/backend.out.log <==
