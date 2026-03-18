@@ -12360,6 +12360,346 @@ async def publish_menu_restaurant_draft(current_user: dict = Depends(get_current
     return {"message": "Menu publié avec succès", "sections": len(draft_sections), "items": len(draft_items)}
 
 
+@api_router.post("/menu-restaurant-draft/import-csv")
+async def import_menu_restaurant_draft_csv(
+    import_request: MenuRestaurantCSVImportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Importer une carte depuis un fichier CSV/Excel vers le menu brouillon (Menu en cours).
+    Utilise la même logique que l'import du menu principal mais sur les collections draft.
+    """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    menu_type = import_request.menu_type
+    if menu_type not in ["food", "boisson"]:
+        raise HTTPException(status_code=400, detail="menu_type doit être 'food' ou 'boisson'")
+    
+    restaurant_id = current_user["restaurant_id"]
+    
+    import csv
+    from io import StringIO
+    import base64
+    
+    # Decode CSV content if base64
+    csv_content = import_request.csv_content
+    try:
+        decoded = base64.b64decode(csv_content).decode('utf-8-sig')
+        csv_content = decoded
+    except:
+        pass
+    
+    # Parse CSV
+    csv_content_io = StringIO(csv_content)
+    first_line = csv_content_io.readline()
+    csv_content_io.seek(0)
+    
+    delimiter = ';' if ';' in first_line else ','
+    reader = csv.DictReader(csv_content_io, delimiter=delimiter)
+    
+    # Log the headers for debugging
+    print(f"[CSV IMPORT DEBUG] Headers detected: {reader.fieldnames}")
+    print(f"[CSV IMPORT DEBUG] First line: {first_line[:200]}")
+    
+    stats = {
+        "sections_created": 0,
+        "sections_updated": 0,
+        "sections_deleted": 0,
+        "items_created": 0,
+        "items_updated": 0,
+        "items_deleted": 0,
+        "errors": [],
+        "debug_headers": reader.fieldnames
+    }
+    
+    imported_section_ids = set()
+    imported_item_ids = set()
+    
+    # Get existing sections to determine default has_happy_hour value
+    existing_sections = await menu_restaurant_draft_sections_collection.find(
+        {"restaurant_id": restaurant_id, "menu_type": menu_type, "is_active": True}
+    ).to_list(500)
+    
+    default_has_happy_hour = any(s.get("has_happy_hour", False) for s in existing_sections)
+    
+    section_cache = {}
+    
+    async def get_or_create_section(section_name: str, parent_id = None) -> str:
+        cache_key = f"{section_name}|{parent_id or ''}"
+        if cache_key in section_cache:
+            section_id = section_cache[cache_key]
+            imported_section_ids.add(section_id)
+            return section_id
+        
+        query = {
+            "restaurant_id": restaurant_id,
+            "menu_type": menu_type,
+            "name": section_name,
+            "is_active": True
+        }
+        if parent_id:
+            query["parent_section_id"] = parent_id
+        else:
+            query["parent_section_id"] = {"$exists": False}
+        
+        existing = await menu_restaurant_draft_sections_collection.find_one(query)
+        
+        if existing:
+            section_cache[cache_key] = existing["section_id"]
+            imported_section_ids.add(existing["section_id"])
+            return existing["section_id"]
+        
+        max_order_doc = await menu_restaurant_draft_sections_collection.find_one(
+            {"restaurant_id": restaurant_id, "menu_type": menu_type},
+            sort=[("order", -1)]
+        )
+        new_order = (max_order_doc.get("order", 0) if max_order_doc else 0) + 1
+        
+        section_id = str(uuid.uuid4())
+        new_section = {
+            "section_id": section_id,
+            "restaurant_id": restaurant_id,
+            "menu_type": menu_type,
+            "name": section_name,
+            "order": new_order,
+            "has_happy_hour": default_has_happy_hour,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        if parent_id:
+            new_section["parent_section_id"] = parent_id
+        
+        await menu_restaurant_draft_sections_collection.insert_one(new_section)
+        stats["sections_created"] += 1
+        section_cache[cache_key] = section_id
+        imported_section_ids.add(section_id)
+        return section_id
+    
+    current_item = None
+    current_item_formats = []
+    
+    # Helper function to get value with multiple possible column names
+    def get_value(row, *keys):
+        for key in keys:
+            val = row.get(key, "")
+            if val:
+                return str(val).strip()
+        return ""
+    
+    row_count = 0
+    for row in reader:
+        row_count += 1
+        try:
+            # Support multiple column name variations
+            section_name = get_value(row, "Section", "section", "SECTION", "Catégorie", "Categorie", "Category")
+            sub_section_name = get_value(row, "Sous-section", "sous-section", "Sous section", "SubSection", "Sub-section")
+            product_name = get_value(row, "Produit", "produit", "PRODUIT", "Product", "Nom", "Name", "Article")
+            description = get_value(row, "Description", "description", "DESCRIPTION", "Desc")
+            format_name = get_value(row, "Format", "format", "FORMAT", "Taille", "Size")
+            prix = get_value(row, "Prix", "prix", "PRIX", "Price", "Tarif").replace("€", "").replace(" ", "")
+            prix_hh = get_value(row, "Prix Happy Hour", "Prix HH", "prix_hh", "HH", "Happy Hour", "PrixHH").replace("€", "").replace(" ", "")
+            
+            tags_str = get_value(row, "Tags", "tags", "TAGS", "Étiquettes")
+            allergens_str = get_value(row, "Allergènes", "Allergens", "allergenes", "ALLERGENES", "Allergies")
+            status_str = get_value(row, "Statut", "Status", "statut", "status", "STATUT")
+            
+            print(f"[CSV IMPORT DEBUG] Row {row_count}: section='{section_name}', product='{product_name}', format='{format_name}', prix='{prix}'")
+            
+            tags = parse_tags(tags_str)
+            allergens = parse_allergens(allergens_str)
+            status = parse_status(status_str)
+            
+            if not section_name and not product_name and not format_name:
+                continue
+            
+            if not product_name and format_name and current_item:
+                try:
+                    price_val = float(prix.replace(",", ".")) if prix else 0
+                    hh_val = float(prix_hh.replace(",", ".")) if prix_hh else None
+                    current_item_formats.append({
+                        "name": format_name,
+                        "price": price_val,
+                        "happy_hour_price": hh_val
+                    })
+                except ValueError:
+                    pass
+                continue
+            
+            if current_item and current_item.get("name"):
+                if current_item_formats:
+                    current_item["formats"] = current_item_formats
+                
+                existing_item = await menu_restaurant_draft_items_collection.find_one({
+                    "restaurant_id": restaurant_id,
+                    "section_id": current_item["section_id"],
+                    "name": current_item["name"],
+                    "is_active": True
+                })
+                
+                if existing_item and import_request.update_existing:
+                    update_data = {
+                        "descriptions": current_item.get("descriptions", []),
+                        "formats": current_item.get("formats", []),
+                        "allergens": current_item.get("allergens", []),
+                        "tags": current_item.get("tags", []),
+                        "status": current_item.get("status", "normal")
+                    }
+                    if current_item.get("price"):
+                        update_data["price"] = current_item["price"]
+                    
+                    await menu_restaurant_draft_items_collection.update_one(
+                        {"item_id": existing_item["item_id"]},
+                        {"$set": update_data}
+                    )
+                    imported_item_ids.add(existing_item["item_id"])
+                    stats["items_updated"] += 1
+                elif not existing_item:
+                    current_item["item_id"] = str(uuid.uuid4())
+                    current_item["restaurant_id"] = restaurant_id
+                    current_item["is_active"] = True
+                    current_item["created_at"] = datetime.now(timezone.utc).isoformat()
+                    
+                    max_order = await menu_restaurant_draft_items_collection.find_one(
+                        {"restaurant_id": restaurant_id, "section_id": current_item["section_id"]},
+                        sort=[("order", -1)]
+                    )
+                    current_item["order"] = (max_order.get("order", 0) if max_order else 0) + 1
+                    
+                    await menu_restaurant_draft_items_collection.insert_one(current_item)
+                    imported_item_ids.add(current_item["item_id"])
+                    stats["items_created"] += 1
+            
+            if product_name:
+                parent_section_id = None
+                if section_name:
+                    parent_section_id = await get_or_create_section(section_name, None)
+                
+                if sub_section_name and parent_section_id:
+                    section_id = await get_or_create_section(sub_section_name, parent_section_id)
+                elif parent_section_id:
+                    section_id = parent_section_id
+                else:
+                    stats["errors"].append(f"Pas de section pour le produit: {product_name}")
+                    current_item = None
+                    current_item_formats = []
+                    continue
+                
+                price_val = None
+                if prix and not format_name:
+                    try:
+                        price_val = float(prix.replace(",", "."))
+                    except ValueError:
+                        pass
+                
+                descriptions = [d.strip() for d in description.split("|") if d.strip()] if description else []
+                
+                current_item = {
+                    "section_id": section_id,
+                    "name": product_name,
+                    "descriptions": descriptions,
+                    "price": price_val,
+                    "formats": [],
+                    "suggestions": [],
+                    "supplements": [],
+                    "allergens": allergens,
+                    "tags": tags,
+                    "status": status
+                }
+                current_item_formats = []
+                
+                if format_name:
+                    try:
+                        price_val = float(prix.replace(",", ".")) if prix else 0
+                        hh_val = float(prix_hh.replace(",", ".")) if prix_hh else None
+                        current_item_formats.append({
+                            "name": format_name,
+                            "price": price_val,
+                            "happy_hour_price": hh_val
+                        })
+                    except ValueError:
+                        pass
+                    current_item["price"] = None
+                    
+        except Exception as e:
+            stats["errors"].append(f"Erreur ligne: {str(e)}")
+    
+    # Save last item
+    if current_item and current_item.get("name"):
+        if current_item_formats:
+            current_item["formats"] = current_item_formats
+        
+        existing_item = await menu_restaurant_draft_items_collection.find_one({
+            "restaurant_id": restaurant_id,
+            "section_id": current_item["section_id"],
+            "name": current_item["name"],
+            "is_active": True
+        })
+        
+        if existing_item and import_request.update_existing:
+            update_data = {
+                "descriptions": current_item.get("descriptions", []),
+                "formats": current_item.get("formats", []),
+                "allergens": current_item.get("allergens", []),
+                "tags": current_item.get("tags", []),
+                "status": current_item.get("status", "normal")
+            }
+            if current_item.get("price"):
+                update_data["price"] = current_item["price"]
+            
+            await menu_restaurant_draft_items_collection.update_one(
+                {"item_id": existing_item["item_id"]},
+                {"$set": update_data}
+            )
+            imported_item_ids.add(existing_item["item_id"])
+            stats["items_updated"] += 1
+        elif not existing_item:
+            current_item["item_id"] = str(uuid.uuid4())
+            current_item["restaurant_id"] = restaurant_id
+            current_item["is_active"] = True
+            current_item["created_at"] = datetime.now(timezone.utc).isoformat()
+            current_item["order"] = 1
+            await menu_restaurant_draft_items_collection.insert_one(current_item)
+            imported_item_ids.add(current_item["item_id"])
+            stats["items_created"] += 1
+    
+    # Cleanup: Delete sections and items NOT in the CSV
+    if imported_section_ids or imported_item_ids:
+        if imported_section_ids:
+            items_to_delete = await menu_restaurant_draft_items_collection.find({
+                "restaurant_id": restaurant_id,
+                "section_id": {"$in": list(imported_section_ids)},
+                "item_id": {"$nin": list(imported_item_ids)},
+                "is_active": True
+            }).to_list(1000)
+            
+            if items_to_delete:
+                item_ids_to_delete = [i["item_id"] for i in items_to_delete]
+                await menu_restaurant_draft_items_collection.delete_many({
+                    "item_id": {"$in": item_ids_to_delete}
+                })
+                stats["items_deleted"] = len(item_ids_to_delete)
+        
+        all_existing_section_ids = [s["section_id"] for s in existing_sections]
+        sections_to_delete = [sid for sid in all_existing_section_ids if sid not in imported_section_ids]
+        
+        if sections_to_delete:
+            await menu_restaurant_draft_items_collection.delete_many({
+                "restaurant_id": restaurant_id,
+                "section_id": {"$in": sections_to_delete}
+            })
+            await menu_restaurant_draft_sections_collection.delete_many({
+                "section_id": {"$in": sections_to_delete}
+            })
+            stats["sections_deleted"] = len(sections_to_delete)
+    
+    return {
+        "success": True,
+        "stats": stats,
+        "message": f"Import terminé: {stats['sections_created']} sections créées, {stats.get('sections_deleted', 0)} sections supprimées, {stats['items_created']} items créés, {stats['items_updated']} items mis à jour, {stats.get('items_deleted', 0)} items supprimés"
+    }
+
+
 # ==================== A L'ARDOISE ENDPOINTS ====================
 # Menu "A l'Ardoise" avec structure fixe et lien partageable permanent
 
