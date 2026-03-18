@@ -11432,6 +11432,12 @@ async def import_menu_restaurant_csv(
     Importer une carte depuis un fichier CSV/Excel.
     Format attendu (même format que l'export):
     Section;Sous-section;Produit;Description;Format;Prix;Prix HH;Tags;Allergènes;Statut
+    
+    LOGIQUE AMÉLIORÉE:
+    - Les sections/items dans le CSV sont créés ou mis à jour
+    - Les sections/items qui ne sont PAS dans le CSV sont SUPPRIMÉS
+    - Les paramètres (has_happy_hour, etc.) sont PRÉSERVÉS pour les sections existantes
+    - Les nouvelles sections HÉRITENT has_happy_hour des sections existantes du même type
     """
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -11467,27 +11473,31 @@ async def import_menu_restaurant_csv(
     stats = {
         "sections_created": 0,
         "sections_updated": 0,
+        "sections_deleted": 0,
         "items_created": 0,
         "items_updated": 0,
+        "items_deleted": 0,
         "errors": []
     }
     
-    # Optionally clear existing data
-    if import_request.clear_existing:
-        existing_sections = await menu_restaurant_sections_collection.find(
-            {"restaurant_id": restaurant_id, "menu_type": menu_type},
-            {"section_id": 1}
-        ).to_list(500)
-        section_ids = [s["section_id"] for s in existing_sections]
-        
-        await menu_restaurant_items_collection.delete_many({
-            "restaurant_id": restaurant_id,
-            "section_id": {"$in": section_ids}
-        })
-        await menu_restaurant_sections_collection.delete_many({
-            "restaurant_id": restaurant_id,
-            "menu_type": menu_type
-        })
+    # Track all section_ids and item_ids that are in the CSV
+    imported_section_ids = set()
+    imported_item_ids = set()
+    
+    # Get existing sections to determine default has_happy_hour value
+    existing_sections = await menu_restaurant_sections_collection.find(
+        {"restaurant_id": restaurant_id, "menu_type": menu_type, "is_active": True}
+    ).to_list(500)
+    
+    # Determine if any existing section has happy_hour enabled (to inherit)
+    default_has_happy_hour = any(s.get("has_happy_hour", False) for s in existing_sections)
+    
+    # Build a map of existing sections by name for quick lookup
+    existing_sections_map = {}
+    for s in existing_sections:
+        parent_id = s.get("parent_section_id", "")
+        key = f"{s['name']}|{parent_id}"
+        existing_sections_map[key] = s
     
     # Cache for sections
     section_cache = {}
@@ -11495,7 +11505,9 @@ async def import_menu_restaurant_csv(
     async def get_or_create_section(section_name: str, parent_id: Optional[str] = None) -> str:
         cache_key = f"{section_name}|{parent_id or ''}"
         if cache_key in section_cache:
-            return section_cache[cache_key]
+            section_id = section_cache[cache_key]
+            imported_section_ids.add(section_id)
+            return section_id
         
         # Search existing section
         query = {
@@ -11513,9 +11525,10 @@ async def import_menu_restaurant_csv(
         
         if existing:
             section_cache[cache_key] = existing["section_id"]
+            imported_section_ids.add(existing["section_id"])
             return existing["section_id"]
         
-        # Create new section
+        # Create new section - INHERIT has_happy_hour from existing sections
         max_order_doc = await menu_restaurant_sections_collection.find_one(
             {"restaurant_id": restaurant_id, "menu_type": menu_type},
             sort=[("order", -1)]
@@ -11529,7 +11542,7 @@ async def import_menu_restaurant_csv(
             "menu_type": menu_type,
             "name": section_name,
             "order": new_order,
-            "has_happy_hour": False,
+            "has_happy_hour": default_has_happy_hour,  # INHERIT from existing sections
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -11539,6 +11552,7 @@ async def import_menu_restaurant_csv(
         await menu_restaurant_sections_collection.insert_one(new_section)
         stats["sections_created"] += 1
         section_cache[cache_key] = section_id
+        imported_section_ids.add(section_id)
         return section_id
     
     # Process each row
@@ -11613,6 +11627,7 @@ async def import_menu_restaurant_csv(
                         {"item_id": existing_item["item_id"]},
                         {"$set": update_data}
                     )
+                    imported_item_ids.add(existing_item["item_id"])
                     stats["items_updated"] += 1
                 elif not existing_item:
                     # Create new item
@@ -11628,6 +11643,7 @@ async def import_menu_restaurant_csv(
                     current_item["order"] = (max_order.get("order", 0) if max_order else 0) + 1
                     
                     await menu_restaurant_items_collection.insert_one(current_item)
+                    imported_item_ids.add(current_item["item_id"])
                     stats["items_created"] += 1
             
             # Start new item
@@ -11717,6 +11733,7 @@ async def import_menu_restaurant_csv(
                 {"item_id": existing_item["item_id"]},
                 {"$set": update_data}
             )
+            imported_item_ids.add(existing_item["item_id"])
             stats["items_updated"] += 1
         elif not existing_item:
             current_item["item_id"] = str(uuid.uuid4())
@@ -11725,12 +11742,48 @@ async def import_menu_restaurant_csv(
             current_item["created_at"] = datetime.now(timezone.utc).isoformat()
             current_item["order"] = 1
             await menu_restaurant_items_collection.insert_one(current_item)
+            imported_item_ids.add(current_item["item_id"])
             stats["items_created"] += 1
+    
+    # ============ CLEANUP: Delete sections and items NOT in the CSV ============
+    # Only do cleanup if we actually imported something (to prevent accidental deletion)
+    if imported_section_ids or imported_item_ids:
+        # Delete items that are in the imported sections but not in the CSV
+        if imported_section_ids:
+            items_to_delete = await menu_restaurant_items_collection.find({
+                "restaurant_id": restaurant_id,
+                "section_id": {"$in": list(imported_section_ids)},
+                "item_id": {"$nin": list(imported_item_ids)},
+                "is_active": True
+            }).to_list(1000)
+            
+            if items_to_delete:
+                item_ids_to_delete = [i["item_id"] for i in items_to_delete]
+                await menu_restaurant_items_collection.delete_many({
+                    "item_id": {"$in": item_ids_to_delete}
+                })
+                stats["items_deleted"] = len(item_ids_to_delete)
+        
+        # Delete sections that are not in the CSV (for this menu_type)
+        all_existing_section_ids = [s["section_id"] for s in existing_sections]
+        sections_to_delete = [sid for sid in all_existing_section_ids if sid not in imported_section_ids]
+        
+        if sections_to_delete:
+            # First delete all items in those sections
+            await menu_restaurant_items_collection.delete_many({
+                "restaurant_id": restaurant_id,
+                "section_id": {"$in": sections_to_delete}
+            })
+            # Then delete the sections
+            await menu_restaurant_sections_collection.delete_many({
+                "section_id": {"$in": sections_to_delete}
+            })
+            stats["sections_deleted"] = len(sections_to_delete)
     
     return {
         "success": True,
         "stats": stats,
-        "message": f"Import terminé: {stats['sections_created']} sections créées, {stats['items_created']} items créés, {stats['items_updated']} items mis à jour"
+        "message": f"Import terminé: {stats['sections_created']} sections créées, {stats.get('sections_deleted', 0)} sections supprimées, {stats['items_created']} items créés, {stats['items_updated']} items mis à jour, {stats.get('items_deleted', 0)} items supprimés"
     }
 
 # ==================== MENU RESTAURANT IMPORT PDF ====================
