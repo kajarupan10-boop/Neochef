@@ -1410,6 +1410,126 @@ async def link_restaurant(
         "restaurant_ids": current_restaurant_ids
     }
 
+@api_router.post("/auth/unlink-restaurant/{restaurant_id}")
+async def unlink_restaurant(
+    restaurant_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Délier un restaurant du compte holding"""
+    # Vérifier que l'utilisateur est admin
+    if current_user["role"] not in ["admin", "holding"]:
+        raise HTTPException(status_code=403, detail="Permission refusée")
+    
+    current_restaurant_ids = current_user.get("restaurant_ids", [])
+    
+    # Vérifier que le restaurant est bien lié au compte
+    if restaurant_id not in current_restaurant_ids:
+        raise HTTPException(status_code=400, detail="Ce restaurant n'est pas lié à votre compte")
+    
+    # Empêcher de délier le restaurant actif si c'est le seul
+    if len(current_restaurant_ids) <= 1:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas délier votre dernier restaurant")
+    
+    # Empêcher de délier le restaurant actuellement sélectionné
+    if current_user.get("restaurant_id") == restaurant_id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas délier le restaurant actuellement sélectionné. Changez de restaurant d'abord.")
+    
+    # Retirer le restaurant de la liste
+    current_restaurant_ids.remove(restaurant_id)
+    
+    # Mettre à jour l'utilisateur
+    await users_collection.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"restaurant_ids": current_restaurant_ids}}
+    )
+    
+    return {"message": "Restaurant délié avec succès", "restaurant_ids": current_restaurant_ids}
+
+@api_router.post("/restaurants/create-for-holding")
+async def create_restaurant_for_holding(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """Créer un nouveau restaurant pour un compte holding"""
+    if current_user["role"] not in ["admin", "holding"]:
+        raise HTTPException(status_code=403, detail="Permission refusée")
+    
+    data = await request.json()
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip()
+    
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom du restaurant est requis")
+    
+    # Créer le restaurant
+    restaurant_id = f"rest_{secrets.token_hex(6)}"
+    restaurant_doc = {
+        "restaurant_id": restaurant_id,
+        "name": name,
+        "description": description or None,
+        "primary_color": "#2c3e50",
+        "secondary_color": "#ecf0f1",
+        "created_at": datetime.now(timezone.utc),
+        "created_by": current_user["user_id"]
+    }
+    await restaurants_collection.insert_one(restaurant_doc)
+    
+    # Ajouter le restaurant à la liste de l'utilisateur
+    current_restaurant_ids = current_user.get("restaurant_ids", [])
+    if current_user.get("restaurant_id") and current_user["restaurant_id"] not in current_restaurant_ids:
+        current_restaurant_ids.append(current_user["restaurant_id"])
+    current_restaurant_ids.append(restaurant_id)
+    
+    await users_collection.update_one(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"restaurant_ids": current_restaurant_ids}}
+    )
+    
+    # Supprimer _id avant de retourner
+    restaurant_doc.pop("_id", None)
+    
+    return {"message": f"Restaurant '{name}' créé avec succès", "restaurant": restaurant_doc}
+
+@api_router.post("/auth/create-holding")
+async def create_holding_account(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """Créer un nouveau compte holding (par un admin)"""
+    if current_user["role"] not in ["admin"]:
+        raise HTTPException(status_code=403, detail="Seuls les admins peuvent créer des comptes holding")
+    
+    data = await request.json()
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+    
+    if not name or not email or not password:
+        raise HTTPException(status_code=400, detail="Tous les champs sont requis")
+    
+    # Vérifier si l'email existe déjà
+    existing = await users_collection.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    
+    # Créer le compte holding
+    user_id = f"user_{secrets.token_hex(6)}"
+    user_doc = {
+        "user_id": user_id,
+        "email": email,
+        "name": name,
+        "password_hash": hash_password(password),
+        "role": "holding",
+        "restaurant_id": None,
+        "restaurant_ids": [],
+        "detailed_permissions": {},
+        "created_at": datetime.now(timezone.utc),
+        "created_by": current_user["user_id"]
+    }
+    await users_collection.insert_one(user_doc)
+    
+    return {"message": f"Compte holding '{name}' créé avec succès", "user_id": user_id}
+
 @api_router.post("/auth/logout")
 async def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
