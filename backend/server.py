@@ -12700,6 +12700,233 @@ async def import_menu_restaurant_draft_csv(
     }
 
 
+@api_router.post("/menu-restaurant-draft/import-pdf")
+async def import_menu_restaurant_draft_pdf(
+    import_request: MenuRestaurantPDFImportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Import PDF vers le menu brouillon (Menu en cours)"""
+    import pdfplumber
+    import re
+    
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    menu_type = import_request.menu_type
+    if menu_type not in ["food", "boisson"]:
+        raise HTTPException(status_code=400, detail="menu_type doit être 'food' ou 'boisson'")
+    
+    restaurant_id = current_user["restaurant_id"]
+    
+    try:
+        pdf_bytes = base64.b64decode(import_request.pdf_base64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur décodage PDF: {str(e)}")
+    
+    stats = {
+        "sections_created": 0,
+        "items_created": 0,
+        "items_updated": 0,
+        "errors": [],
+        "extracted_data": []
+    }
+    
+    extracted_items = []
+    current_section = None
+    
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            for page_num, page in enumerate(pdf.pages):
+                text = page.extract_text()
+                if not text:
+                    continue
+                
+                lines = text.split('\n')
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    if (line.isupper() and len(line) > 2 and len(line) < 50) or \
+                       (line.startswith("NOS ") or line.startswith("LES ")):
+                        current_section = line.title()
+                        continue
+                    
+                    price_pattern = r'^(.+?)\s+(\d+[,\.]\d{2})\s*€?$'
+                    match = re.match(price_pattern, line)
+                    
+                    if match and current_section:
+                        item_name = match.group(1).strip()
+                        price_str = match.group(2).replace(',', '.')
+                        try:
+                            price = float(price_str)
+                            extracted_items.append({
+                                "section": current_section,
+                                "name": item_name,
+                                "price": price,
+                                "description": ""
+                            })
+                        except ValueError:
+                            pass
+                    elif current_section and len(line) > 3:
+                        if extracted_items and not any(c.isdigit() for c in line[-5:]):
+                            if not extracted_items[-1].get("description"):
+                                extracted_items[-1]["description"] = line
+                            else:
+                                extracted_items[-1]["description"] += " " + line
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lecture PDF: {str(e)}")
+    
+    if not extracted_items:
+        return {
+            "success": False,
+            "stats": stats,
+            "message": "Aucun item extrait du PDF. Le format n'est peut-être pas compatible.",
+            "preview": []
+        }
+    
+    stats["extracted_data"] = extracted_items[:100]
+    
+    return {
+        "success": True,
+        "stats": stats,
+        "message": f"{len(extracted_items)} item(s) extrait(s) du PDF",
+        "preview": extracted_items[:100]
+    }
+
+
+@api_router.post("/menu-restaurant-draft/import-pdf/confirm")
+async def confirm_import_menu_restaurant_draft_pdf(
+    items: List[dict] = Body(...),
+    menu_type: str = Body(...),
+    clear_existing: bool = Body(False),
+    current_user: dict = Depends(get_current_user)
+):
+    """Confirmer l'import PDF vers le menu brouillon"""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    restaurant_id = current_user["restaurant_id"]
+    
+    existing_sections = await menu_restaurant_draft_sections_collection.find(
+        {"restaurant_id": restaurant_id, "menu_type": menu_type, "is_active": True}
+    ).to_list(500)
+    default_has_happy_hour = any(s.get("has_happy_hour", False) for s in existing_sections)
+    
+    stats = {
+        "sections_created": 0,
+        "items_created": 0,
+        "items_updated": 0
+    }
+    
+    if clear_existing:
+        existing_sections_list = await menu_restaurant_draft_sections_collection.find(
+            {"restaurant_id": restaurant_id, "menu_type": menu_type},
+            {"section_id": 1}
+        ).to_list(500)
+        section_ids = [s["section_id"] for s in existing_sections_list]
+        
+        await menu_restaurant_draft_items_collection.delete_many({
+            "restaurant_id": restaurant_id,
+            "section_id": {"$in": section_ids}
+        })
+        await menu_restaurant_draft_sections_collection.delete_many({
+            "restaurant_id": restaurant_id,
+            "menu_type": menu_type
+        })
+    
+    section_cache = {}
+    
+    for item in items:
+        section_name = item.get("section", "").strip()
+        if not section_name:
+            continue
+        
+        if section_name not in section_cache:
+            existing_section = await menu_restaurant_draft_sections_collection.find_one({
+                "restaurant_id": restaurant_id,
+                "menu_type": menu_type,
+                "name": section_name,
+                "is_active": True
+            })
+            
+            if existing_section:
+                section_cache[section_name] = existing_section["section_id"]
+            else:
+                max_order_doc = await menu_restaurant_draft_sections_collection.find_one(
+                    {"restaurant_id": restaurant_id, "menu_type": menu_type},
+                    sort=[("order", -1)]
+                )
+                new_order = (max_order_doc.get("order", 0) if max_order_doc else 0) + 1
+                
+                section_id = str(uuid.uuid4())
+                new_section = {
+                    "section_id": section_id,
+                    "restaurant_id": restaurant_id,
+                    "menu_type": menu_type,
+                    "name": section_name,
+                    "order": new_order,
+                    "has_happy_hour": default_has_happy_hour,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await menu_restaurant_draft_sections_collection.insert_one(new_section)
+                section_cache[section_name] = section_id
+                stats["sections_created"] += 1
+        
+        section_id = section_cache[section_name]
+        
+        existing_item = await menu_restaurant_draft_items_collection.find_one({
+            "restaurant_id": restaurant_id,
+            "section_id": section_id,
+            "name": item.get("name", ""),
+            "is_active": True
+        })
+        
+        if existing_item:
+            await menu_restaurant_draft_items_collection.update_one(
+                {"item_id": existing_item["item_id"]},
+                {"$set": {
+                    "price": item.get("price"),
+                    "descriptions": [item.get("description", "")] if item.get("description") else []
+                }}
+            )
+            stats["items_updated"] += 1
+        else:
+            max_order = await menu_restaurant_draft_items_collection.find_one(
+                {"restaurant_id": restaurant_id, "section_id": section_id},
+                sort=[("order", -1)]
+            )
+            new_order = (max_order.get("order", 0) if max_order else 0) + 1
+            
+            new_item = {
+                "item_id": str(uuid.uuid4()),
+                "restaurant_id": restaurant_id,
+                "section_id": section_id,
+                "name": item.get("name", ""),
+                "descriptions": [item.get("description", "")] if item.get("description") else [],
+                "price": item.get("price"),
+                "formats": [],
+                "suggestions": [],
+                "supplements": [],
+                "allergens": [],
+                "tags": [],
+                "order": new_order,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await menu_restaurant_draft_items_collection.insert_one(new_item)
+            stats["items_created"] += 1
+    
+    return {
+        "success": True,
+        "stats": stats,
+        "message": f"Import confirmé: {stats['sections_created']} sections, {stats['items_created']} items créés, {stats['items_updated']} mis à jour"
+    }
+
+
 # ==================== A L'ARDOISE ENDPOINTS ====================
 # Menu "A l'Ardoise" avec structure fixe et lien partageable permanent
 
