@@ -5488,9 +5488,15 @@ async def list_group_reservations(
 ):
     """Lister toutes les réservations de groupe
     Par défaut, exclut les réservations archivées et supprimées
+    Accessible par admin ou staff avec permission menu_groupe.actif
     """
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.actif
+    is_admin = current_user["role"] == "admin"
+    menu_groupe_perms = current_user.get("detailed_permissions", {}).get("menu_groupe", {})
+    has_menu_groupe_permission = menu_groupe_perms.get("actif", False) if isinstance(menu_groupe_perms, dict) else menu_groupe_perms
+    
+    if not is_admin and not has_menu_groupe_permission:
+        raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.actif required")
     
     # Build filter
     filter_query = {"restaurant_id": current_user["restaurant_id"]}
@@ -5531,8 +5537,13 @@ async def toggle_archive_reservation(
     """Archiver ou désarchiver une réservation"""
     print(f"[ARCHIVE] User: {current_user.get('email')}, role: {current_user.get('role')}, restaurant: {current_user.get('restaurant_id')}")
     
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_modifier
+    is_admin = current_user["role"] == "admin"
+    menu_groupe_perms = current_user.get("detailed_permissions", {}).get("menu_groupe", {})
+    has_modifier_permission = menu_groupe_perms.get("reservation_modifier", False) if isinstance(menu_groupe_perms, dict) else False
+    
+    if not is_admin and not has_modifier_permission:
+        raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.reservation_modifier required")
     
     print(f"[ARCHIVE] Looking for reservation_id={reservation_id}, restaurant_id={current_user['restaurant_id']}")
     
@@ -5563,8 +5574,13 @@ async def restore_deleted_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Restaurer une réservation supprimée"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_supprimer
+    is_admin = current_user["role"] == "admin"
+    menu_groupe_perms = current_user.get("detailed_permissions", {}).get("menu_groupe", {})
+    has_permission = menu_groupe_perms.get("reservation_supprimer", False) if isinstance(menu_groupe_perms, dict) else False
+    
+    if not is_admin and not has_permission:
+        raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.reservation_supprimer required")
     
     result = await group_reservations_collection.update_one(
         {"reservation_id": reservation_id, "restaurant_id": current_user["restaurant_id"]},
@@ -5582,8 +5598,13 @@ async def permanently_delete_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Supprimer définitivement une réservation (depuis la corbeille)"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.reservation_supprimer
+    is_admin = current_user["role"] == "admin"
+    menu_groupe_perms = current_user.get("detailed_permissions", {}).get("menu_groupe", {})
+    has_permission = menu_groupe_perms.get("reservation_supprimer", False) if isinstance(menu_groupe_perms, dict) else False
+    
+    if not is_admin and not has_permission:
+        raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.reservation_supprimer required")
     
     result = await group_reservations_collection.delete_one(
         {"reservation_id": reservation_id, "restaurant_id": current_user["restaurant_id"]}
@@ -5600,8 +5621,13 @@ async def get_group_reservation(
     current_user: dict = Depends(get_current_user)
 ):
     """Obtenir les détails d'une réservation"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission menu_groupe.actif
+    is_admin = current_user["role"] == "admin"
+    menu_groupe_perms = current_user.get("detailed_permissions", {}).get("menu_groupe", {})
+    has_permission = menu_groupe_perms.get("actif", False) if isinstance(menu_groupe_perms, dict) else menu_groupe_perms
+    
+    if not is_admin and not has_permission:
+        raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.actif required")
     
     reservation = await group_reservations_collection.find_one(
         {"reservation_id": reservation_id, "restaurant_id": current_user["restaurant_id"]},
