@@ -1070,6 +1070,7 @@ class UpdateEventMenuSectionRequest(BaseModel):
     """Modifier une section de menu"""
     name: Optional[str] = None
     order: Optional[int] = None
+    color: Optional[str] = None  # Couleur de la section
 
 class CreateEventMenuItemRequest(BaseModel):
     """Créer un item dans une section de menu"""
@@ -16572,25 +16573,27 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
     
     # Utiliser TOUJOURS le logo bleu RAL 5008 (Le Cercle) pour le PDF Événement
     logo_displayed = False
-    try:
-        default_logo_path = ROOT_DIR / "logo_bleu_ral5008.png"
-        if default_logo_path.exists():
-            pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=logo_size)
-            logo_displayed = True
-    except Exception as e:
-        print(f"Logo error: {e}")
-    
-    # Si le logo n'existe pas, utiliser le logo du restaurant en fallback
-    if not logo_displayed and restaurant and restaurant.get("logo_base64"):
+    # Priorité 1: Logo du restaurant en base64
+    if restaurant and restaurant.get("logo_base64"):
         try:
             logo_data = base64.b64decode(restaurant["logo_base64"])
             logo_io = BytesIO(logo_data)
             pdf.image(logo_io, x=logo_x, y=header_y, w=logo_size)
             logo_displayed = True
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Restaurant logo error: {e}")
     
-    # Si toujours pas de logo, cercle avec initiales
+    # Priorité 2: Logo par défaut si pas de logo restaurant
+    if not logo_displayed:
+        try:
+            default_logo_path = ROOT_DIR / "logo_bleu_ral5008.png"
+            if default_logo_path.exists():
+                pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=logo_size)
+                logo_displayed = True
+        except Exception as e:
+            print(f"Default logo error: {e}")
+    
+    # Priorité 3: Cercle avec initiales du restaurant
     if not logo_displayed and restaurant:
         logo_center_y = header_y + logo_size / 2
         pdf.set_fill_color(38, 55, 74)  # RAL 5008 Bleu
@@ -16691,7 +16694,7 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         
         pdf.ln(item_spacing)
         
-        # Items de la section - NOM + DESCRIPTION SUR LA MÊME LIGNE
+        # Items de la section - NOM sur une ligne, DESCRIPTION en dessous
         section_id = section.get("section_id")
         items = [item for item in all_menu_items if item.get("section_id") == section_id]
         
@@ -16699,32 +16702,40 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
             item_name = safe_text(item.get("name", ""))
             item_desc = safe_text(item.get("description", ""))
             
-            # Calculer les dimensions
+            # Nom du plat - CENTRÉ et en gras
             pdf.set_font("Helvetica", "B", 12)
-            name_width = pdf.get_string_width(f"- {item_name}")
+            pdf.set_text_color(0, 0, 0)
+            name_text = f"- {item_name}"
+            name_width = pdf.get_string_width(name_text)
+            pdf.set_xy(center_x - name_width/2, pdf.get_y())
+            pdf.cell(name_width, item_height - 1, name_text, ln=True, align="C")
             
+            # Description en dessous - italique et centrée
             if item_desc:
                 pdf.set_font("Helvetica", "I", 10)
-                desc_width = pdf.get_string_width(f"  {item_desc}")
-                total_width = name_width + desc_width
-                start_x = center_x - total_width / 2
-                
-                # Nom en gras
-                pdf.set_font("Helvetica", "B", 12)
-                pdf.set_text_color(0, 0, 0)
-                pdf.set_xy(start_x, pdf.get_y())
-                pdf.cell(name_width, item_height - 1, f"- {item_name}", ln=False)
-                
-                # Description en italique à côté
-                pdf.set_font("Helvetica", "I", 10)
                 pdf.set_text_color(139, 90, 43)
-                pdf.cell(desc_width, item_height - 1, f"  {item_desc}", ln=True)
-            else:
-                pdf.set_font("Helvetica", "B", 12)
-                pdf.set_text_color(0, 0, 0)
-                pdf.set_xy(margin, pdf.get_y())
-                pdf.cell(content_width, item_height - 1, f"- {item_name}", align="C")
-                pdf.ln()
+                # Gérer les descriptions longues avec multi_cell centré
+                desc_lines = []
+                max_desc_width = content_width - 40  # Laisser des marges
+                words = item_desc.split()
+                current_line = ""
+                for word in words:
+                    test_line = f"{current_line} {word}".strip() if current_line else word
+                    if pdf.get_string_width(test_line) < max_desc_width:
+                        current_line = test_line
+                    else:
+                        if current_line:
+                            desc_lines.append(current_line)
+                        current_line = word
+                if current_line:
+                    desc_lines.append(current_line)
+                
+                for line in desc_lines:
+                    line_width = pdf.get_string_width(line)
+                    pdf.set_xy(center_x - line_width/2, pdf.get_y())
+                    pdf.cell(line_width, item_height - 2, line, ln=True, align="C")
+            
+            pdf.ln(item_spacing)  # Espace entre les plats
         
         pdf.ln(section_spacing)
     
