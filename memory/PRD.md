@@ -1,145 +1,76 @@
-# NeoChef PWA - Product Requirements Document
+# NeoChef - Product Requirements Document
 
-## Original Problem Statement
-Migration d'une application PWA existante nommée "NeoChef" pour la gestion de restaurants. L'application inclut un système complet de gestion avec :
-- Back-office Super Admin pour gérer tous les restaurants de la plateforme
-- Système de permissions granulaires pour contrôler l'accès aux modules
-- Système de menu "brouillon" avant publication
-- Module de gestion des prestataires
-- Notification de mise à jour pour la PWA
+## Application Overview
+PWA de gestion de restaurant (React/Expo + FastAPI + MongoDB) permettant la gestion des menus, fiches techniques, tâches, réservations et équipes.
 
-## Stack Technologique
-- Frontend: React Native/Expo for Web (build statique)
-- Backend: FastAPI (Python)
-- Base de données: MongoDB
-- Email: SendGrid
+## Core Features Implemented
 
-## Core Features
+### Système de Permissions
+- Permissions granulaires par module (lecture, édition, ajout, suppression)
+- Gestion admin/staff avec `detailed_permissions`
+- Endpoints: PUT /api/users/{user_id}
 
-### 1. Système de Permissions Granulaires
-- Contrôle d'accès en lecture/écriture aux différents modules
-- Menu Restaurant (final) = lecture seule pour staff
-- Menu Restaurant en cours = édition complète pour staff
-- Fiche Technique = permissions granulaires (sections, produits, photos)
-- Permission spécifique pour le bouton "Publier" du menu brouillon
+### Menu Restaurant
+- Menu principal (lecture seule pour staff)
+- Menu en cours (brouillon modifiable)
+- Import/Export CSV et Excel
+- Import PDF avec extraction automatique
+- Support du format Excel exporté par l'application
+- Endpoint: /api/menu-restaurant-draft/import-csv, /api/menu-restaurant-draft/import-pdf
 
-### 2. Système de Menu Brouillon
-- Environnement de test "Menu en cours" pour modifications sans affecter le menu public
-- Bouton "Publier" pour appliquer les changements au menu public
-- Staff peut éditer le menu en cours mais pas le menu final
+### Ardoise
+- Stockage séparé par restaurant (`mep_ardoise` collection)
+- Indépendante des imports CSV (jamais supprimée)
+- Endpoint: GET/PUT /api/ardoise
 
-### 3. Fiche Technique
-- Gestion des sections (Bar, Cuisine)
-- Gestion des produits avec ingrédients
-- Analyse des marges
-- Export PDF/Excel
-- Permissions granulaires pour ajouter/modifier/supprimer sections et produits
+### UI/UX PWA iOS
+- Barre de navigation inférieure fixée avec `position: fixed`
+- Support de `env(safe-area-inset-bottom)` pour iOS
+- Header étendu avec padding pour la barre d'état iOS
+- Espacement réduit entre les icônes de navigation
 
-### 4. Menu Groupe
-- Gestion des réservations de groupe
-- Sections et items personnalisables
-- Génération de factures
+## Recent Changes (19/03/2026)
 
-### 5. PWA
-- Notification de mise à jour pour informer les utilisateurs
-- Service Worker pour le cache et fonctionnement hors-ligne
-- Support iOS avec gestion des safe areas
+### Import CSV/Excel Amélioré
+- Support direct des fichiers .xlsx et .xls (bibliothèque `xlsx`)
+- Détection automatique du format d'export de l'application
+- Conversion automatique vers le format CSV standard
+- Préservation des paramètres (has_happy_hour) lors des imports
+- Nouvelles sections héritent `has_happy_hour` des existantes
+- Suppression des sections/items non présents dans le CSV
 
-## What's Been Implemented
+### Endpoints ajoutés pour Menu Draft
+- POST /api/menu-restaurant-draft/import-csv
+- POST /api/menu-restaurant-draft/import-pdf
+- POST /api/menu-restaurant-draft/import-pdf/confirm
 
-### Session 16 mars 2026 - Corrections majeures des permissions
+### Corrections PWA iOS
+- Barre de navigation en `position: fixed` au bas de l'écran
+- Couleur de fond étendue jusqu'au bord avec `safe-area-inset-bottom`
+- Header avec `padding-top: env(safe-area-inset-top)`
 
-#### Corrections Frontend (Fiche Technique)
-- [x] **Bug Fix CRITICAL** : Page "Fiche Technique" affichait une page blanche
-  - Cause : Fonction `canEditFicheTechnique()` non définie dans le composant
-  - Solution : Ajout de la fonction dans FicheTechniqueScreen
+## Tech Stack
+- Frontend: React/Expo for Web
+- Backend: FastAPI
+- Database: MongoDB
+- Auth: JWT
+- PWA: Service Workers
 
-- [x] **Bug Fix CRITICAL** : Boutons d'édition non visibles pour staff avec permissions
-  - Cause : Utilisation de `isManager` au lieu des permissions détaillées
-  - Solution : Remplacement par `canAddSection`, `canEditSection`, `canDeleteSection`, `canAddProduct`, `canEditProduct`, `canDeleteProduct`
+## Key Collections
+- `mep_users` - Utilisateurs avec `detailed_permissions`
+- `mep_restaurants` - Configuration restaurant
+- `mep_menu_restaurant_sections` - Sections menu principal
+- `mep_menu_restaurant_items` - Items menu principal
+- `mep_menu_restaurant_draft_sections` - Sections brouillon
+- `mep_menu_restaurant_draft_items` - Items brouillon
+- `mep_ardoise` - Ardoise (indépendante par restaurant)
 
-- [x] **Amélioration** : Permissions utilisées pour conditionner les boutons :
-  - Vue détail produit : bouton ✏️, colonnes de prix
-  - Vue liste sections : boutons +, ✏️, 🗑️
-  - Vue liste produits : boutons ✏️, 🗑️
-  - Bouton "+ Ajouter une section"
+## API Credentials
+- Admin: groupenaga@gmail.com / LeCercle123!
+- Staff: tharshikan@orange.fr / Kajan1012
 
-#### Corrections Frontend (Menu Restaurant)
-- [x] **Bug Fix** : Menu Restaurant final toujours en lecture seule pour staff
-  - Même si permissions accordées, le menu final n'est modifiable que par admin
-  
-- [x] **Bug Fix** : Menu Restaurant en cours avec édition complète pour staff
-  - Staff avec accès = tous les boutons d'édition (+, ✏️, 🗑️) sur sections et produits
-
-#### Corrections Frontend (Divers)
-- [x] **Bug Fix** : Bouton "Modifier mot de passe" non visible pour staff
-  - Cause : Couleur du texte non définie
-  - Solution : Ajout de `color: secondaryColor` et `data-testid`
-
-- [x] **Bug Fix** : Réservations Menu Groupe non affichées
-  - Cause : Données non rechargées à l'entrée dans l'écran
-  - Solution : Ajout d'un `useEffect` pour charger les réservations au montage
-
-- [x] **Bug Fix** : Normalisation de `section_access` pour Fiche Technique
-  - Support de 'tous', 'all' et 'both'
-
-#### Corrections Backend
-- [x] API `/api/group-reservations/list` fonctionne pour admin
-- [x] API `/api/users/{user_id}/detailed-permissions` sauvegarde correctement les permissions
-
-### Session 15 mars 2026
-- [x] Bug Fix : Page "Équipe" affichait un écran vide
-- [x] Nouvelle fonctionnalité : Bouton "Donner tous les accès"
-- [x] Bug Fix : Permissions vides pour les utilisateurs staff
-- [x] Bug Fix : Accès aux événements pour le staff
-- [x] Bug Fix : Changement de restaurant
-- [x] Bug Fix : API de traduction
-
-## Prioritized Backlog
-
-### P0 (Critique) - Corrigés ✅
-- [x] Fiche Technique page blanche
-- [x] Boutons d'édition non visibles pour staff avec permissions
-- [x] Menu Restaurant lecture seule pour staff
-- [x] Menu Restaurant en cours éditable pour staff
-- [x] Bouton "Modifier mot de passe" pour staff
-- [x] Réservations Menu Groupe non affichées
-
-### P1 (Important) - À surveiller
-- [ ] Vérifier que les permissions sont correctement sauvegardées via l'interface
-- [ ] Traduction en production (vérifier EMERGENT_LLM_KEY)
-
-### P2 (Améliorations)
-- [ ] Espaces vides PWA iOS
-- [ ] Aperçu PDF blanc sur iOS
-- [ ] Refactoring server.py et index.tsx (monolithes)
-- [ ] Bouton "Retour" menu client sur iOS
-
-## Architecture
-
-### Backend
-- `/app/backend/server.py` - API FastAPI (monolithe ~16k lignes)
-- `/app/backend/.env` - Configuration (MONGO_URL, EMERGENT_LLM_KEY)
-
-### Frontend
-- `/app/temp_clone/frontend/app/index.tsx` - Application React/Expo (monolithe ~24k lignes)
-- `/app/frontend/build/` - Build statique servi par Nginx
-- `/app/frontend/.env` - Configuration (REACT_APP_BACKEND_URL)
-
-### Key Endpoints
-- `POST /api/auth/login` - Connexion
-- `POST /api/auth/change-password` - Changement mot de passe
-- `PUT /api/users/{user_id}` - Mise à jour utilisateur
-- `PUT /api/users/{user_id}/detailed-permissions` - Mise à jour permissions
-- `GET /api/group-reservations/list` - Liste des réservations groupe
-- `GET /api/fiche-sections/list` - Liste des sections Fiche Technique
-- `GET /api/fiche-products/list` - Liste des produits Fiche Technique
-
-## Credentials (Preview)
-- Admin: `groupenaga@gmail.com` / `LeCercle123!`
-- Staff: `tharshikan@orange.fr` / `Kajan1012`
-
-## Notes pour le déploiement
-1. Après déploiement, re-sauvegarder les permissions des utilisateurs staff via l'interface
-2. Vérifier la variable EMERGENT_LLM_KEY en production pour la traduction
-3. Demander aux utilisateurs de vider leur cache PWA après mise à jour
+## Backlog (P2/P3)
+- Bouton "Retour" sur page menu client iOS
+- Aperçu PDF blanc sur iOS
+- Refactoring des fichiers monolithes (server.py, index.tsx)
+- Réactivation réinitialisation mot de passe par email
