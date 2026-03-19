@@ -1,87 +1,89 @@
 # NeoChef - Product Requirements Document
 
-## Application Overview
-PWA de gestion de restaurant (React/Expo + FastAPI + MongoDB) permettant la gestion des menus, fiches techniques, tâches, réservations et équipes.
+## Résumé du Produit
+NeoChef est une PWA de gestion de restaurant complète comprenant:
+- Gestion des menus (carte, ardoise)
+- Gestion des événements avec prestataires
+- Système de permissions pour le staff
+- Traductions automatiques des menus
+- Génération de PDF (menus, propositions événements)
 
-## Core Features Implemented
+## Architecture Technique
+- **Frontend**: Expo for Web (React Native Web) - `/app/temp_clone/frontend`
+- **Backend**: FastAPI - `/app/backend/server.py`
+- **Database**: MongoDB
+- **Build servi depuis**: `/app/frontend/build` (copie de `temp_clone/frontend/dist`)
 
-### Système de Permissions
-- Permissions granulaires par module (lecture, édition, ajout, suppression)
-- Gestion admin/staff avec `detailed_permissions`
-- Endpoints: PUT /api/users/{user_id}
-- **Modèles de tâches** : Staff avec permissions `modeles_ajouter/modifier/supprimer` peut gérer les templates
-- **Menu Restaurant** : Staff avec permissions `produits.ajouter/modifier/supprimer` peut éditer le menu
+## État Actuel - Session du 19 Mars 2026
 
-### Menu Restaurant & Menu en Cours (Draft)
-- Menu principal (lecture seule pour staff)
-- Menu en cours (brouillon modifiable)
-- Import/Export CSV et Excel
-- Import PDF avec extraction automatique
-- **Endpoints PUT ajoutés pour menu draft** : `/api/menu-restaurant-draft/items/{item_id}` et `/api/menu-restaurant-draft/sections/{section_id}`
+### Bugs Corrigés (P0)
 
-### Module Événements
-- Création et gestion d'événements avec prestataires, tâches et menu
-- **PDF événement** : Logo du restaurant prioritaire, mise en page améliorée (nom sur une ligne, description en dessous)
-- **Prévisualisation PDF** : Modal avec boutons Retour et Télécharger
-- **Couleur de section** : Champ `color` ajouté au modèle `UpdateEventMenuSectionRequest`
-- **Prix des plats** : Affichage par section/succession (pas de total additionnant toutes les successions)
+1. **Menu Client Bloqué** ✅
+   - **Cause**: Configuration manquante de l'URL backend dans Expo
+   - **Solution**: Ajout de `EXPO_PUBLIC_BACKEND_URL` dans `.env` et `app.json`
+   - **Fichiers modifiés**: `/app/temp_clone/frontend/.env`, `/app/temp_clone/frontend/app.json`
 
-### Ardoise
-- Stockage séparé par restaurant (`mep_ardoise` collection)
-- Indépendante des imports CSV (jamais supprimée)
-- **Bouton Retour amélioré** sur l'écran Rapport Ardoise
+2. **Détails Prestataire Non Affichés** ✅
+   - **Cause**: Build du frontend non synchronisé entre `temp_clone` et `frontend/build`
+   - **Solution**: Modification du code pour afficher TOUJOURS les horaires et tarifs (même vides)
+   - **Fichiers modifiés**: `/app/temp_clone/frontend/app/index.tsx` (lignes ~22912-22930)
 
-### UI/UX
-- Barre de navigation inférieure fixée avec `position: fixed` pour iOS
-- **Formulaire prestataire** : Horaires (Heure début/fin) avec style compact pour éviter le débordement
+3. **Logo PDF Déformé** ✅
+   - **Cause**: Logo forcé en carré (w=h) sans respecter les proportions
+   - **Solution**: Utilisation de PIL pour calculer le ratio et préserver les proportions
+   - **Fichiers modifiés**: `/app/backend/server.py` (fonction `export_event_menu_pdf`)
 
-## Recent Changes (19/03/2026)
+### Corrections Techniques Importantes
+- Le build Expo doit être copié de `/app/temp_clone/frontend/dist` vers `/app/frontend/build`
+- Commande de déploiement:
+  ```bash
+  cd /app/temp_clone/frontend && npx expo export --platform web
+  rm -rf /app/frontend/build/* && cp -r /app/temp_clone/frontend/dist/* /app/frontend/build/
+  sudo supervisorctl restart frontend
+  ```
 
-### Bug Fix: Modifications menu non sauvegardées
-- **Cause racine** : Frontend appelait `/menu-restaurant/items/` au lieu de `${apiPrefix}/items/` pour le menu draft
-- **Correction Backend** : Ajout des endpoints PUT pour `/api/menu-restaurant-draft/items/{item_id}` et `/api/menu-restaurant-draft/sections/{section_id}`
-- **Correction Frontend** : Utilisation de `${apiPrefix}/items/` dans la fonction de mise à jour
+## Problèmes Restants (Backlog)
 
-### Module Événements amélioré
-- **Couleur de section** : Ajout du champ `color` au modèle backend pour sauvegarder la couleur
-- **PDF événement** : Logo du restaurant en priorité (avant le logo par défaut), mise en page des plats sur plusieurs lignes
-- **Prévisualisation PDF** : Ajout d'un modal avec boutons Retour et Télécharger
-- **Prix des successions** : Affichage par section avec note explicative (pas d'addition de toutes les successions)
+### P1 - Priorité Haute
+- **Sauvegarde Permissions UI**: Le formulaire frontend de gestion des permissions staff ne sauvegarde pas correctement
+- **Aperçu PDF blanc iOS**: L'aperçu PDF dans la PWA iOS ne fonctionne pas
+- **Service Worker/Cache**: Mettre en place une stratégie de mise à jour du SW
 
-### Corrections Permissions Staff
-- **Task Templates**: Endpoints utilisent `detailed_permissions.taches.modeles_*`
-- **Menu Restaurant**: Endpoints vérifient `detailed_permissions.menu_restaurant.*`
-- **Liste Templates**: Staff avec `taches.categories: []` a accès à toutes les catégories
+### P2 - Priorité Moyenne
+- **Barre Navigation iOS**: Problème de mise en page persistant
+- **Photos Espaces Privatisation**: Ne s'affichent pas côté client
+- **Édition Ardoise**: Ne charge pas les plats du menu
 
-### Performance
-- Traductions automatiques **désactivées** temporairement (bloquaient le serveur)
+### P3 - Refactoring
+- Décomposer `server.py` (~17k lignes) en modules
+- Décomposer `index.tsx` (~25k lignes) en composants
 
-## Tech Stack
-- Frontend: React/Expo for Web
-- Backend: FastAPI
-- Database: MongoDB
-- Auth: JWT
-- PWA: Service Workers
+## Endpoints Clés
 
-## Key Collections
-- `mep_users` - Utilisateurs avec `detailed_permissions`
-- `mep_restaurants` - Configuration restaurant avec `logo_base64`
-- `mep_menu_restaurant_sections` - Sections menu principal
-- `mep_menu_restaurant_items` - Items menu principal
-- `mep_menu_restaurant_draft_sections` - Sections brouillon
-- `mep_menu_restaurant_draft_items` - Items brouillon
-- `mep_event_menu_sections` - Sections menu événement
-- `mep_event_menu_items` - Items menu événement
-- `mep_ardoise` - Ardoise (indépendante par restaurant)
-- `mep_privatisation_spaces` - Espaces de privatisation avec photos
+### API Publique (Menu Client)
+- `GET /api/menu-restaurant/public/{restaurant_id}` - Menu public
 
-## API Credentials
-- Admin: groupenaga@gmail.com / LeCercle123!
-- Staff: tharshikan@orange.fr / Kajan1012
+### API Événements
+- `GET /api/events` - Liste des événements
+- `GET /api/events/{id}/providers` - Prestataires d'un événement
+- `POST /api/events/{id}/providers` - Ajouter prestataire
+- `PUT /api/events/{id}/providers/{provider_id}` - Modifier prestataire
+- `GET /api/events/{id}/menu/export-pdf` - Générer PDF menu événement
 
-## Backlog (P2/P3)
-- Photos des espaces de privatisation non affichées pour les clients (à investiguer)
-- Aperçu PDF blanc sur iOS
-- Refactoring des fichiers monolithes (server.py ~17k lignes, index.tsx ~25k lignes)
-- Réactivation réinitialisation mot de passe par email
-- Réactiver les traductions automatiques avec un worker séparé
+### API Menu
+- `GET /api/menu-restaurant/sections` - Sections du menu
+- `PUT /api/menu-restaurant-draft/items/{id}` - Modifier item menu draft
+
+## Credentials de Test
+- **Admin**: `groupenaga@gmail.com` / `LeCercle123!`
+- **Staff**: `tharshikan@orange.fr` / `Kajan1012`
+
+## Intégrations Tierces
+- **MongoDB**: Base de données
+- **Emergent LLM**: Traductions automatiques (clé dans `.env`)
+- **XLSX**: Import/export Excel
+
+## Notes de Développement
+- Toujours rebuilder le frontend Expo après modifications
+- Toujours copier le build vers `/app/frontend/build`
+- Les `_id` MongoDB doivent être exclus des réponses JSON

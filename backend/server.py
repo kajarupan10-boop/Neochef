@@ -16575,18 +16575,40 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
     pdf.set_line_width(0.3)
     pdf.rect(margin + 3, margin + 3, content_width - 6, page_height - 2*margin - 6)
     
-    # ============ LOGO DU RESTAURANT - CENTRÉ ============
+    # ============ LOGO DU RESTAURANT - CENTRÉ (avec préservation des proportions) ============
     logo_displayed = False
-    logo_size = 35  # Taille fixe du logo
-    logo_x = center_x - logo_size / 2
+    max_logo_height = 35  # Hauteur maximale du logo
+    max_logo_width = 60   # Largeur maximale du logo
     header_y = margin + corner_offset + 15
+    logo_actual_width = max_logo_width
+    logo_actual_height = max_logo_height
     
     # Priorité 1: Logo du restaurant en base64
     if restaurant and restaurant.get("logo_base64"):
         try:
+            from PIL import Image as PILImage
             logo_data = base64.b64decode(restaurant["logo_base64"])
             logo_io = BytesIO(logo_data)
-            pdf.image(logo_io, x=logo_x, y=header_y, w=logo_size, h=logo_size)
+            
+            # Lire les dimensions originales du logo
+            pil_img = PILImage.open(logo_io)
+            orig_width, orig_height = pil_img.size
+            
+            # Calculer les nouvelles dimensions en préservant les proportions
+            aspect_ratio = orig_width / orig_height
+            if aspect_ratio > 1:  # Logo plus large que haut
+                logo_actual_width = min(max_logo_width, orig_width * max_logo_height / orig_height)
+                logo_actual_height = logo_actual_width / aspect_ratio
+            else:  # Logo plus haut que large ou carré
+                logo_actual_height = min(max_logo_height, orig_height * max_logo_width / orig_width)
+                logo_actual_width = logo_actual_height * aspect_ratio
+            
+            # Centrer le logo
+            logo_x = center_x - logo_actual_width / 2
+            
+            # Réinitialiser le BytesIO pour la lecture par FPDF
+            logo_io.seek(0)
+            pdf.image(logo_io, x=logo_x, y=header_y, w=logo_actual_width, h=logo_actual_height)
             logo_displayed = True
         except Exception as e:
             print(f"Restaurant logo error: {e}")
@@ -16596,13 +16618,17 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         try:
             default_logo_path = ROOT_DIR / "logo_bleu_ral5008.png"
             if default_logo_path.exists():
-                pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=logo_size, h=logo_size)
+                logo_x = center_x - max_logo_height / 2  # Logo par défaut carré
+                pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=max_logo_height, h=max_logo_height)
+                logo_actual_height = max_logo_height
                 logo_displayed = True
         except Exception as e:
             print(f"Default logo error: {e}")
     
     # Priorité 3: Cercle avec initiales du restaurant
     if not logo_displayed and restaurant:
+        logo_size = max_logo_height  # Utiliser la hauteur max pour le cercle
+        logo_x = center_x - logo_size / 2
         logo_center_y = header_y + logo_size / 2
         pdf.set_fill_color(38, 55, 74)  # RAL 5008 Bleu
         pdf.ellipse(logo_x, header_y, logo_size, logo_size, 'F')
@@ -16611,9 +16637,10 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         pdf.set_text_color(255, 255, 255)
         pdf.set_xy(logo_x, logo_center_y - 5)
         pdf.cell(logo_size, 10, safe_text(initials), align="C")
+        logo_actual_height = logo_size
     
     # ============ NOM DU RESTAURANT - SOUS LE LOGO ============
-    restaurant_name_y = header_y + logo_size + 3
+    restaurant_name_y = header_y + logo_actual_height + 3
     restaurant_name = restaurant.get("name", "Restaurant") if restaurant else "Restaurant"
     pdf.set_font("Helvetica", "B", 14)
     pdf.set_text_color(38, 55, 74)  # RAL 5008 Bleu
@@ -16631,47 +16658,35 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
     pdf.polygon([(center_x, deco_y - diamond_size), (center_x + diamond_size, deco_y), 
                  (center_x, deco_y + diamond_size), (center_x - diamond_size, deco_y)], 'F')
     
-    # ============ TITRE + DATE SUR LA MÊME LIGNE (moins d'espace) ============
-    title_y = deco_y + 4  # Réduit de 10 à 4
+    # ============ TITRE (centré) ============
+    title_y = deco_y + 8
     event_title = event.get("title", "Menu")
     event_date = event.get("date", "")
     
-    # Formater la date
-    formatted_date = ""
+    # Titre centré
+    pdf.set_font("Helvetica", "B", 26)
+    pdf.set_text_color(44, 44, 44)
+    pdf.set_xy(margin, title_y)
+    pdf.cell(content_width, 12, safe_text(event_title), align="C", ln=True)
+    
+    # ============ DATE (en dessous du titre, centrée) ============
     if event_date:
         try:
             from datetime import datetime as dt
             date_obj = dt.strptime(event_date, "%Y-%m-%d")
-            months_fr = ["janvier", "fevrier", "mars", "avril", "mai", "juin", 
-                        "juillet", "aout", "septembre", "octobre", "novembre", "decembre"]
+            months_fr = ["janvier", "février", "mars", "avril", "mai", "juin", 
+                        "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
             formatted_date = f"{date_obj.day} {months_fr[date_obj.month - 1]} {date_obj.year}"
         except:
             formatted_date = event_date
-    
-    # Titre et date sur la même ligne
-    pdf.set_font("Helvetica", "B", 24)
-    pdf.set_text_color(44, 44, 44)
-    title_width = pdf.get_string_width(event_title)
-    
-    if formatted_date:
-        pdf.set_font("Helvetica", "I", 12)
-        date_width = pdf.get_string_width(f"  -  {formatted_date}")
-        total_width = title_width + date_width
-        start_x = center_x - total_width / 2
-        
-        pdf.set_font("Helvetica", "B", 24)
-        pdf.set_xy(start_x, title_y)
-        pdf.cell(title_width, 12, safe_text(event_title), ln=False)
         
         pdf.set_font("Helvetica", "I", 12)
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(date_width, 12, safe_text(f"  -  {formatted_date}"), ln=True)
-    else:
-        pdf.set_xy(margin, title_y)
-        pdf.cell(content_width, 12, safe_text(event_title), align="C")
+        pdf.set_xy(margin, pdf.get_y() + 2)
+        pdf.cell(content_width, 8, safe_text(formatted_date), align="C", ln=True)
     
-    # Seconde ligne décorative (espace réduit)
-    deco2_y = title_y + 14  # Réduit de 16 à 14
+    # Seconde ligne décorative
+    deco2_y = pdf.get_y() + 4
     pdf.set_draw_color(180, 160, 120)
     pdf.set_line_width(0.3)
     pdf.line(margin + 30, deco2_y, page_width - margin - 30, deco2_y)
