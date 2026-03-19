@@ -16575,19 +16575,18 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
     pdf.set_line_width(0.3)
     pdf.rect(margin + 3, margin + 3, content_width - 6, page_height - 2*margin - 6)
     
-    # ============ EN-TÊTE AVEC LOGO - CENTRÉ (logo plus haut) ============
-    header_y = margin + 8  # Réduit de 15 à 8 pour remonter le logo
-    logo_size = 30  # Légèrement réduit
-    logo_x = center_x - logo_size / 2
-    
-    # Utiliser TOUJOURS le logo bleu RAL 5008 (Le Cercle) pour le PDF Événement
+    # ============ LOGO DU RESTAURANT - CENTRÉ ============
     logo_displayed = False
+    logo_size = 35  # Taille fixe du logo
+    logo_x = center_x - logo_size / 2
+    header_y = margin + corner_offset + 15
+    
     # Priorité 1: Logo du restaurant en base64
     if restaurant and restaurant.get("logo_base64"):
         try:
             logo_data = base64.b64decode(restaurant["logo_base64"])
             logo_io = BytesIO(logo_data)
-            pdf.image(logo_io, x=logo_x, y=header_y, w=logo_size)
+            pdf.image(logo_io, x=logo_x, y=header_y, w=logo_size, h=logo_size)
             logo_displayed = True
         except Exception as e:
             print(f"Restaurant logo error: {e}")
@@ -16597,7 +16596,7 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         try:
             default_logo_path = ROOT_DIR / "logo_bleu_ral5008.png"
             if default_logo_path.exists():
-                pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=logo_size)
+                pdf.image(str(default_logo_path), x=logo_x, y=header_y, w=logo_size, h=logo_size)
                 logo_displayed = True
         except Exception as e:
             print(f"Default logo error: {e}")
@@ -16613,8 +16612,16 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         pdf.set_xy(logo_x, logo_center_y - 5)
         pdf.cell(logo_size, 10, safe_text(initials), align="C")
     
-    # Ligne décorative avec losange central - après le logo (moins d'espace)
-    deco_y = header_y + logo_size + 12  # Augmenté de 5 à 12 pour plus d'espace entre logo et ligne
+    # ============ NOM DU RESTAURANT - SOUS LE LOGO ============
+    restaurant_name_y = header_y + logo_size + 3
+    restaurant_name = restaurant.get("name", "Restaurant") if restaurant else "Restaurant"
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_text_color(38, 55, 74)  # RAL 5008 Bleu
+    pdf.set_xy(margin, restaurant_name_y)
+    pdf.cell(content_width, 8, safe_text(restaurant_name.upper()), align="C")
+    
+    # Ligne décorative avec losange central - après le nom du restaurant
+    deco_y = restaurant_name_y + 12  # Après le nom du restaurant
     pdf.set_draw_color(38, 55, 74)  # RAL 5008 Bleu
     pdf.set_line_width(0.4)
     line_width = 70
