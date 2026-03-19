@@ -1019,6 +1019,9 @@ class CreateProviderRequest(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+    start_time: Optional[str] = None  # Heure de début
+    end_time: Optional[str] = None    # Heure de fin
+    price: Optional[str] = None       # Tarif pour l'événement
 
 class UpdateProviderRequest(BaseModel):
     """Modifier un prestataire"""
@@ -1027,6 +1030,9 @@ class UpdateProviderRequest(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+    start_time: Optional[str] = None  # Heure de début
+    end_time: Optional[str] = None    # Heure de fin
+    price: Optional[str] = None       # Tarif pour l'événement
     quote_status: Optional[str] = None
     invoice_status: Optional[str] = None
     payment_method: Optional[str] = None
@@ -15805,6 +15811,9 @@ async def create_provider(event_id: str, request: CreateProviderRequest, current
         "phone": request.phone,
         "email": request.email,
         "notes": request.notes,
+        "start_time": request.start_time,
+        "end_time": request.end_time,
+        "price": request.price,
         "quote_path": None,
         "quote_status": "pending",
         "invoice_path": None,
