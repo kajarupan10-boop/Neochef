@@ -1069,12 +1069,14 @@ class CreateEventMenuItemRequest(BaseModel):
     name: str
     description: Optional[str] = None
     order: Optional[int] = None
+    price: Optional[str] = None
 
 class UpdateEventMenuItemRequest(BaseModel):
     """Modifier un item de menu"""
     name: Optional[str] = None
     description: Optional[str] = None
     order: Optional[int] = None
+    price: Optional[str] = None
 
 class CreatePricePackageRequest(BaseModel):
     """Créer un package de prix"""
@@ -16043,6 +16045,7 @@ async def create_event_menu_item(event_id: str, request: CreateEventMenuItemRequ
         "restaurant_id": current_user["restaurant_id"],
         "name": request.name,
         "description": request.description,
+        "price": request.price,
         "order": order,
         "is_active": True,
         "created_at": datetime.now(timezone.utc)
