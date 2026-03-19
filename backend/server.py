@@ -40,11 +40,28 @@ def sanitize_filename(name: str) -> str:
 
 # Background task for auto-regenerating translations
 async def regenerate_translations_background(restaurant_id: str):
-    """Background task to regenerate translations after menu changes"""
+    """Background task to regenerate translations after menu changes - with timeout protection"""
     try:
         # Wait a bit to batch multiple rapid changes
         await asyncio.sleep(2)
         
+        # Set a global timeout for the entire translation process (5 minutes max)
+        try:
+            await asyncio.wait_for(
+                _do_regenerate_translations(restaurant_id),
+                timeout=300.0  # 5 minutes max
+            )
+        except asyncio.TimeoutError:
+            logging.warning(f"Translation timed out for restaurant {restaurant_id}")
+        except asyncio.CancelledError:
+            logging.info(f"Translation cancelled for restaurant {restaurant_id}")
+            raise
+    except Exception as e:
+        logging.error(f"Background translation error for {restaurant_id}: {e}")
+
+async def _do_regenerate_translations(restaurant_id: str):
+    """Internal function to perform translations"""
+    try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         
         logging.info(f"Auto-regenerating translations for restaurant {restaurant_id}")
@@ -181,26 +198,16 @@ Items: {batch}"""
         logging.info(f"Auto-translation complete for restaurant {restaurant_id}: {len(texts_to_translate)} texts")
         
     except Exception as e:
-        logging.error(f"Background translation error: {e}")
+        logging.error(f"Translation process error: {e}")
 
 # Track pending translation tasks to avoid duplicates
 _pending_translation_tasks: Dict[str, asyncio.Task] = {}
 
 def trigger_translation_regeneration(restaurant_id: str):
-    """Trigger background translation regeneration for a restaurant"""
-    global _pending_translation_tasks
-    
-    # Cancel any pending task for this restaurant
-    if restaurant_id in _pending_translation_tasks:
-        task = _pending_translation_tasks[restaurant_id]
-        if not task.done():
-            task.cancel()
-    
-    # Create new background task
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(regenerate_translations_background(restaurant_id))
-    _pending_translation_tasks[restaurant_id] = task
-    logging.info(f"Scheduled translation regeneration for restaurant {restaurant_id}")
+    """Trigger background translation regeneration for a restaurant - DISABLED for performance
+    Translations are too slow and block the server. Users should trigger translations manually."""
+    # DISABLED: translations were causing server hangs
+    logging.info(f"Translation regeneration skipped for restaurant {restaurant_id} (auto-translation disabled)")
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection with error handling
@@ -3933,8 +3940,11 @@ async def create_task_template(
     create_request: CreateTaskTemplateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour créer des modèles de tâches
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_create = current_user["role"] == "admin" or taches_perms.get("modeles_ajouter", False)
+    if not can_create:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot create task templates")
     
     category_doc = await categories_collection.find_one(
         {"category_id": create_request.category_id, "restaurant_id": current_user["restaurant_id"]}
@@ -3981,18 +3991,23 @@ async def list_task_templates(
     category_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Lister les tâches modèles - Staff voit seulement ses catégories"""
+    """Lister les tâches modèles - Staff voit seulement ses catégories (ou toutes si vide)"""
     query = {"restaurant_id": current_user["restaurant_id"], "is_active": True}
     
     if category_id:
         query["category_id"] = category_id
     
-    # Staff voit seulement les templates de ses catégories assignées
+    # Staff: vérifier les catégories assignées dans detailed_permissions.taches.categories
+    # Si la liste est vide, le staff a accès à toutes les catégories
     if current_user["role"] == "staff":
-        assigned = current_user.get("assigned_categories", [])
+        taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+        assigned = taches_perms.get("categories", [])
+        # Also check old system
         if not assigned:
-            return []
-        query["category_id"] = {"$in": assigned}
+            assigned = current_user.get("assigned_categories", [])
+        # If still empty, staff can see all categories (full access)
+        if assigned:  # Only filter if categories are explicitly set
+            query["category_id"] = {"$in": assigned}
     
     templates = await task_templates_collection.find(query, {"_id": 0}).to_list(500)
     
@@ -4011,8 +4026,11 @@ async def update_task_template(
     update_request: UpdateTaskTemplateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour modifier des modèles de tâches
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_update = current_user["role"] == "admin" or taches_perms.get("modeles_modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update task templates")
     
     update_data = {k: v for k, v in update_request.dict().items() if v is not None}
     
@@ -4034,8 +4052,11 @@ async def delete_task_template(
     template_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour supprimer des modèles de tâches
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_delete = current_user["role"] == "admin" or taches_perms.get("modeles_supprimer", False)
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot delete task templates")
     
     result = await task_templates_collection.update_one(
         {"template_id": template_id, "restaurant_id": current_user["restaurant_id"]},
@@ -4055,8 +4076,11 @@ async def create_subtask(
     current_user: dict = Depends(get_current_user)
 ):
     """Créer une sous-tâche liée à un template parent"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour créer des modèles de tâches (subtasks font partie des modèles)
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_create = current_user["role"] == "admin" or taches_perms.get("modeles_ajouter", False)
+    if not can_create:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot create subtasks")
     
     # Vérifier que le template parent existe
     parent_template = await task_templates_collection.find_one({
@@ -4123,8 +4147,11 @@ async def update_subtask(
     current_user: dict = Depends(get_current_user)
 ):
     """Mettre à jour une sous-tâche"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour modifier des modèles de tâches
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_update = current_user["role"] == "admin" or taches_perms.get("modeles_modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update subtasks")
     
     update_data = {k: v for k, v in update_request.dict().items() if v is not None}
     
@@ -4147,8 +4174,11 @@ async def delete_subtask(
     current_user: dict = Depends(get_current_user)
 ):
     """Supprimer une sous-tâche"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour supprimer des modèles de tâches
+    taches_perms = current_user.get("detailed_permissions", {}).get("taches", {})
+    can_delete = current_user["role"] == "admin" or taches_perms.get("modeles_supprimer", False)
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot delete subtasks")
     
     result = await subtasks_collection.update_one(
         {"subtask_id": subtask_id, "restaurant_id": current_user["restaurant_id"]},
@@ -9818,8 +9848,12 @@ async def create_menu_restaurant_section(
     current_user: dict = Depends(get_current_user)
 ):
     """Créer une section dans le Menu Restaurant (Food ou Boisson)"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour ajouter des sections au menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    section_perms = menu_perms.get("section", {})
+    can_add = current_user["role"] == "admin" or menu_perms.get("ajouter", False) or section_perms.get("ajouter", False)
+    if not can_add:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot add menu sections")
     
     # Valider le type de menu
     if create_request.menu_type not in ["food", "boisson"]:
@@ -9905,8 +9939,12 @@ async def update_menu_restaurant_section(
     current_user: dict = Depends(get_current_user)
 ):
     """Mettre à jour une section du Menu Restaurant"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour modifier des sections du menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    section_perms = menu_perms.get("section", {})
+    can_update = current_user["role"] == "admin" or menu_perms.get("modifier", False) or section_perms.get("modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update menu sections")
     
     update_data = {k: v for k, v in update_request.dict().items() if v is not None}
     
@@ -9931,8 +9969,12 @@ async def delete_menu_restaurant_section(
     current_user: dict = Depends(get_current_user)
 ):
     """Supprimer une section du Menu Restaurant"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour supprimer des sections du menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    section_perms = menu_perms.get("section", {})
+    can_delete = current_user["role"] == "admin" or menu_perms.get("supprimer", False) or section_perms.get("supprimer", False)
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot delete menu sections")
     
     # Soft delete
     result = await menu_restaurant_sections_collection.update_one(
@@ -9960,8 +10002,12 @@ async def create_menu_restaurant_item(
     current_user: dict = Depends(get_current_user)
 ):
     """Créer un item dans une section du Menu Restaurant"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour ajouter des items au menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    produits_perms = menu_perms.get("produits", {})
+    can_add = current_user["role"] == "admin" or menu_perms.get("ajouter", False) or produits_perms.get("ajouter", False)
+    if not can_add:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot add menu items")
     
     # Vérifier que la section existe
     section = await menu_restaurant_sections_collection.find_one({
@@ -10097,8 +10143,12 @@ async def update_menu_restaurant_item(
     current_user: dict = Depends(get_current_user)
 ):
     """Mettre à jour un item du Menu Restaurant"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour modifier des items du menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    produits_perms = menu_perms.get("produits", {})
+    can_update = current_user["role"] == "admin" or menu_perms.get("modifier", False) or produits_perms.get("modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update menu items")
     
     update_data = {}
     
@@ -10195,8 +10245,12 @@ async def delete_menu_restaurant_item(
     current_user: dict = Depends(get_current_user)
 ):
     """Supprimer un item du Menu Restaurant"""
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions pour supprimer des items du menu restaurant
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    produits_perms = menu_perms.get("produits", {})
+    can_delete = current_user["role"] == "admin" or menu_perms.get("supprimer", False) or produits_perms.get("supprimer", False)
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot delete menu items")
     
     result = await menu_restaurant_items_collection.update_one(
         {"item_id": item_id, "restaurant_id": current_user["restaurant_id"]},
