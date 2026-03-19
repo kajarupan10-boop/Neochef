@@ -955,6 +955,7 @@ class UpdateMenuRestaurantItemRequest(BaseModel):
     tags: Optional[List[str]] = None
     excel_status: Optional[str] = None  # "added" (vert), "deleted" (rouge), "modified" (violet), "normal"
     modified_fields: Optional[List[str]] = None  # ["name", "price", "description"] - pour coloration Excel
+    status: Optional[str] = None  # Statut UI: "a_ajouter", "a_supprimer", "a_modifier", "normal"
 
 class CreateMenuRestaurantNoteRequest(BaseModel):
     """Créer une note de menu (ex: Happy Hour -20%)"""
@@ -10223,6 +10224,8 @@ async def update_menu_restaurant_item(
         update_data["excel_status"] = update_request.excel_status
     if update_request.modified_fields is not None:
         update_data["modified_fields"] = update_request.modified_fields
+    if update_request.status is not None:
+        update_data["status"] = update_request.status
     
     if update_data:
         await menu_restaurant_items_collection.update_one(
@@ -12422,6 +12425,136 @@ async def delete_menu_restaurant_draft_item(item_id: str, current_user: dict = D
     restaurant_id = current_user["restaurant_id"]
     await menu_restaurant_draft_items_collection.delete_one({"item_id": item_id, "restaurant_id": restaurant_id})
     return {"message": "Item supprimé"}
+
+@api_router.put("/menu-restaurant-draft/items/{item_id}")
+async def update_menu_restaurant_draft_item(
+    item_id: str,
+    update_request: UpdateMenuRestaurantItemRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mettre à jour un item du brouillon Menu Restaurant"""
+    # Vérifier les permissions
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    produits_perms = menu_perms.get("produits", {})
+    can_update = current_user["role"] == "admin" or menu_perms.get("modifier", False) or produits_perms.get("modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update menu items")
+    
+    update_data = {}
+    
+    if update_request.name is not None:
+        update_data["name"] = update_request.name
+    if update_request.descriptions is not None:
+        update_data["descriptions"] = update_request.descriptions
+    if update_request.price is not None:
+        update_data["price"] = update_request.price
+    if update_request.order is not None:
+        update_data["order"] = update_request.order
+    if update_request.is_active is not None:
+        update_data["is_active"] = update_request.is_active
+    
+    # Handle formats with IDs
+    if update_request.formats is not None:
+        formats = []
+        for fmt in update_request.formats:
+            formats.append({
+                "format_id": fmt.format_id or f"fmt_{uuid.uuid4().hex[:8]}",
+                "name": fmt.name,
+                "price": fmt.price,
+                "happy_hour_price": fmt.happy_hour_price
+            })
+        update_data["formats"] = formats
+    
+    # Handle suggestions with IDs
+    if update_request.suggestions is not None:
+        suggestions = []
+        for sug in update_request.suggestions:
+            suggestions.append({
+                "suggestion_id": sug.suggestion_id or f"sug_{uuid.uuid4().hex[:8]}",
+                "name": sug.name,
+                "price": sug.price
+            })
+        update_data["suggestions"] = suggestions
+    
+    # Handle supplements with IDs
+    if update_request.supplements is not None:
+        supplements = []
+        for sup in update_request.supplements:
+            supplements.append({
+                "supplement_id": sup.supplement_id or f"sup_{uuid.uuid4().hex[:8]}",
+                "name": sup.name,
+                "price": sup.price
+            })
+        update_data["supplements"] = supplements
+    
+    # Handle options with IDs
+    if update_request.options is not None:
+        options = []
+        for opt in update_request.options:
+            options.append({
+                "option_id": opt.option_id or f"opt_{uuid.uuid4().hex[:8]}",
+                "name": opt.name,
+                "price": opt.price
+            })
+        update_data["options"] = options
+    
+    # Handle happy_hour_price and tva_rate
+    if update_request.happy_hour_price is not None:
+        update_data["happy_hour_price"] = update_request.happy_hour_price
+    if update_request.tva_rate is not None:
+        update_data["tva_rate"] = update_request.tva_rate
+    
+    # Handle allergens, tags and excel status
+    if update_request.allergens is not None:
+        update_data["allergens"] = update_request.allergens
+    if update_request.tags is not None:
+        update_data["tags"] = update_request.tags
+    if update_request.excel_status is not None:
+        update_data["excel_status"] = update_request.excel_status
+    if update_request.modified_fields is not None:
+        update_data["modified_fields"] = update_request.modified_fields
+    if update_request.status is not None:
+        update_data["status"] = update_request.status
+    
+    if update_data:
+        await menu_restaurant_draft_items_collection.update_one(
+            {"item_id": item_id, "restaurant_id": current_user["restaurant_id"]},
+            {"$set": update_data}
+        )
+    
+    item_doc = await menu_restaurant_draft_items_collection.find_one(
+        {"item_id": item_id},
+        {"_id": 0}
+    )
+    return item_doc
+
+@api_router.put("/menu-restaurant-draft/sections/{section_id}")
+async def update_menu_restaurant_draft_section(
+    section_id: str,
+    update_request: UpdateMenuRestaurantSectionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mettre à jour une section du brouillon Menu Restaurant"""
+    # Vérifier les permissions
+    menu_perms = current_user.get("detailed_permissions", {}).get("menu_restaurant", {})
+    section_perms = menu_perms.get("section", {})
+    can_update = current_user["role"] == "admin" or menu_perms.get("modifier", False) or section_perms.get("modifier", False)
+    if not can_update:
+        raise HTTPException(status_code=403, detail="Permission denied: Cannot update menu sections")
+    
+    update_data = {k: v for k, v in update_request.dict().items() if v is not None}
+    
+    if update_data:
+        await menu_restaurant_draft_sections_collection.update_one(
+            {"section_id": section_id, "restaurant_id": current_user["restaurant_id"]},
+            {"$set": update_data}
+        )
+    
+    section_doc = await menu_restaurant_draft_sections_collection.find_one(
+        {"section_id": section_id},
+        {"_id": 0}
+    )
+    return section_doc
 
 @api_router.post("/menu-restaurant-draft/initialize")
 async def initialize_menu_restaurant_draft(current_user: dict = Depends(get_current_user)):
