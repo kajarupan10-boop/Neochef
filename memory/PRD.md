@@ -5,7 +5,7 @@ NeoChef est une PWA de gestion de restaurant complète comprenant:
 - Gestion des menus (carte, ardoise)
 - Gestion des événements avec prestataires
 - Système de permissions pour le staff
-- Traductions automatiques des menus
+- Traductions automatiques des menus (multi-langues)
 - Génération de PDF (menus, propositions événements)
 
 ## Architecture Technique
@@ -14,40 +14,49 @@ NeoChef est une PWA de gestion de restaurant complète comprenant:
 - **Database**: MongoDB
 - **Build servi depuis**: `/app/frontend/build` (copie de `temp_clone/frontend/dist`)
 
-## État Actuel - Session du 19 Mars 2026
+## Session du 19 Mars 2026
 
-### Bugs Corrigés (P0)
+### Bugs Corrigés
 
-1. **Menu Client Bloqué** ✅
-   - **Cause**: Configuration manquante de l'URL backend dans Expo
-   - **Solution**: Ajout de `EXPO_PUBLIC_BACKEND_URL` dans `.env` et `app.json`
-   - **Fichiers modifiés**: `/app/temp_clone/frontend/.env`, `/app/temp_clone/frontend/app.json`
+#### 1. Menu Client Bloqué ✅
+- **Cause**: URL du backend manquante dans la config Expo
+- **Solution**: Ajout de `EXPO_PUBLIC_BACKEND_URL` dans `.env` et `app.json`
+- **Fichiers**: `/app/temp_clone/frontend/.env`, `/app/temp_clone/frontend/app.json`
 
-2. **Détails Prestataire Non Affichés** ✅
-   - **Cause**: Build du frontend non synchronisé entre `temp_clone` et `frontend/build`
-   - **Solution**: Modification du code pour afficher TOUJOURS les horaires et tarifs (même vides)
-   - **Fichiers modifiés**: `/app/temp_clone/frontend/app/index.tsx` (lignes ~22912-22930)
+#### 2. Détails Prestataire Non Affichés ✅
+- **Cause**: Build non synchronisé entre `temp_clone` et `frontend/build`
+- **Solution**: Affichage systématique des horaires/tarifs
+- **Fichiers**: `/app/temp_clone/frontend/app/index.tsx`
 
-3. **Logo PDF Déformé** ✅
-   - **Cause**: Logo forcé en carré (w=h) sans respecter les proportions
-   - **Solution**: Utilisation de PIL pour calculer le ratio et préserver les proportions
-   - **Fichiers modifiés**: `/app/backend/server.py` (fonction `export_event_menu_pdf`)
+#### 3. Logo PDF Déformé ✅
+- **Cause**: Logo forcé en carré sans respect des proportions
+- **Solution**: Utilisation de PIL pour calculer le ratio
+- **Fichiers**: `/app/backend/server.py`
 
-### Corrections Techniques Importantes
-- Le build Expo doit être copié de `/app/temp_clone/frontend/dist` vers `/app/frontend/build`
-- Commande de déploiement:
-  ```bash
-  cd /app/temp_clone/frontend && npx expo export --platform web
-  rm -rf /app/frontend/build/* && cp -r /app/temp_clone/frontend/dist/* /app/frontend/build/
-  sudo supervisorctl restart frontend
-  ```
+#### 4. Prix des Plats dans PDF Événement ✅
+- **Cause**: Prix non affichés dans la génération PDF
+- **Solution**: Ajout de l'affichage du prix à côté du nom du plat
+- **Fichiers**: `/app/backend/server.py` (fonction `export_event_menu_pdf`)
+
+#### 5. Traduction des Tailles (Petit/Grand) ✅
+- **Cause**: Les noms de formats n'étaient pas traduits
+- **Solution**: Ajout de traduction pour "Petit", "Grand" → "小份", "大份" (chinois), etc.
+- **Fichiers**: `/app/temp_clone/frontend/app/client/[restaurant_id].tsx`
+
+### Point Technique Important
+Le frontend Expo est dans `/app/temp_clone/frontend` mais le serveur sert `/app/frontend/build`. Après chaque modification frontend:
+```bash
+cd /app/temp_clone/frontend && npx expo export --platform web
+cp -r dist/* /app/frontend/build/
+sudo supervisorctl restart frontend
+```
 
 ## Problèmes Restants (Backlog)
 
 ### P1 - Priorité Haute
-- **Sauvegarde Permissions UI**: Le formulaire frontend de gestion des permissions staff ne sauvegarde pas correctement
+- **Sauvegarde Permissions UI**: Le formulaire de gestion des permissions staff ne sauvegarde pas correctement
 - **Aperçu PDF blanc iOS**: L'aperçu PDF dans la PWA iOS ne fonctionne pas
-- **Service Worker/Cache**: Mettre en place une stratégie de mise à jour du SW
+- **Service Worker/Cache**: Stratégie de mise à jour du SW à définir
 
 ### P2 - Priorité Moyenne
 - **Barre Navigation iOS**: Problème de mise en page persistant
@@ -62,28 +71,18 @@ NeoChef est une PWA de gestion de restaurant complète comprenant:
 
 ### API Publique (Menu Client)
 - `GET /api/menu-restaurant/public/{restaurant_id}` - Menu public
+- `GET /api/public/translations/{restaurant_id}` - Traductions cachées
 
 ### API Événements
 - `GET /api/events` - Liste des événements
 - `GET /api/events/{id}/providers` - Prestataires d'un événement
-- `POST /api/events/{id}/providers` - Ajouter prestataire
-- `PUT /api/events/{id}/providers/{provider_id}` - Modifier prestataire
 - `GET /api/events/{id}/menu/export-pdf` - Générer PDF menu événement
-
-### API Menu
-- `GET /api/menu-restaurant/sections` - Sections du menu
-- `PUT /api/menu-restaurant-draft/items/{id}` - Modifier item menu draft
 
 ## Credentials de Test
 - **Admin**: `groupenaga@gmail.com` / `LeCercle123!`
 - **Staff**: `tharshikan@orange.fr` / `Kajan1012`
 
-## Intégrations Tierces
+## Intégrations
 - **MongoDB**: Base de données
-- **Emergent LLM**: Traductions automatiques (clé dans `.env`)
+- **Emergent LLM**: Traductions automatiques
 - **XLSX**: Import/export Excel
-
-## Notes de Développement
-- Toujours rebuilder le frontend Expo après modifications
-- Toujours copier le build vers `/app/frontend/build`
-- Les `_id` MongoDB doivent être exclus des réponses JSON

@@ -1933,6 +1933,14 @@ async def generate_restaurant_translations(restaurant_id: str):
                 idx = len(texts_to_translate)
                 texts_to_translate.append(desc)
                 text_mapping[idx] = ("item", item.get("item_id"), f"description_{desc_idx}")
+        
+        # Item selling_formats names (Petit, Grand, etc.)
+        for fmt_idx, fmt in enumerate(item.get("selling_formats", [])):
+            fmt_name = fmt.get("name", "")
+            if fmt_name:
+                idx = len(texts_to_translate)
+                texts_to_translate.append(fmt_name)
+                text_mapping[idx] = ("item", item.get("item_id"), f"format_{fmt_idx}")
     
     # Add Ardoise items (daily specials) for translation
     ardoise = await ardoise_collection.find_one({"restaurant_id": restaurant_id}, {"_id": 0})
@@ -16732,14 +16740,34 @@ async def export_event_menu_pdf(event_id: str, current_user: dict = Depends(get_
         for item in items:
             item_name = safe_text(item.get("name", ""))
             item_desc = safe_text(item.get("description", ""))
+            item_price = item.get("price")  # Prix du plat
             
-            # Nom du plat - CENTRÉ et en gras
+            # Nom du plat - CENTRÉ et en gras, avec prix si disponible
             pdf.set_font("Helvetica", "B", 12)
             pdf.set_text_color(0, 0, 0)
-            name_text = f"- {item_name}"
-            name_width = pdf.get_string_width(name_text)
-            pdf.set_xy(center_x - name_width/2, pdf.get_y())
-            pdf.cell(name_width, item_height - 1, name_text, ln=True, align="C")
+            
+            if item_price is not None and item_price != "" and float(item_price) > 0:
+                # Afficher nom et prix sur la même ligne
+                name_text = f"- {item_name}"
+                price_text = f"{float(item_price):.2f} EUR"
+                name_width = pdf.get_string_width(name_text)
+                price_width = pdf.get_string_width(price_text)
+                total_width = name_width + 15 + price_width
+                start_x = center_x - total_width/2
+                
+                pdf.set_xy(start_x, pdf.get_y())
+                pdf.cell(name_width + 15, item_height - 1, name_text, ln=False)
+                
+                # Prix en vert
+                pdf.set_font("Helvetica", "B", 11)
+                pdf.set_text_color(39, 150, 80)  # Vert
+                pdf.cell(price_width, item_height - 1, price_text, ln=True)
+            else:
+                # Sans prix
+                name_text = f"- {item_name}"
+                name_width = pdf.get_string_width(name_text)
+                pdf.set_xy(center_x - name_width/2, pdf.get_y())
+                pdf.cell(name_width, item_height - 1, name_text, ln=True, align="C")
             
             # Description en dessous - italique et centrée
             if item_desc:
