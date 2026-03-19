@@ -433,6 +433,8 @@ class MenuGroupePermissions(BaseModel):
     statut: bool = False
     proposition: bool = False
     facture: bool = False
+    proposition_generer: bool = False
+    facture_generer: bool = False
 
 class EvenementPermissions(BaseModel):
     """Permissions pour Événements"""
@@ -442,6 +444,15 @@ class EvenementPermissions(BaseModel):
     supprimer: bool = False
     archiver: bool = False
     prestataires: ActionPermissions = ActionPermissions()
+    # Permissions pour le menu de l'événement
+    menu_section: ActionPermissions = ActionPermissions()
+    menu_plats: ActionPermissions = ActionPermissions()
+    menu_packages: ActionPermissions = ActionPermissions()
+    # Permissions pour les tâches de l'événement
+    taches: ActionPermissions = ActionPermissions()
+    # Permissions PDF
+    proposition_generer: bool = False
+    facture_generer: bool = False
 
 class FacturationPermissions(BaseModel):
     """Permissions pour Facturation/BonBon"""
@@ -6746,8 +6757,22 @@ async def generate_manager_pdf(
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    # Vérifier les permissions: admin ou staff avec permission appropriée
+    is_admin = user["role"] == "admin"
+    menu_groupe_perms = user.get("detailed_permissions", {}).get("menu_groupe", {})
+    
+    # Pour proposition: staff avec menu_groupe.proposition_generer
+    # Pour facture: staff avec menu_groupe.facture_generer
+    has_proposition_perm = menu_groupe_perms.get("proposition_generer", False) if isinstance(menu_groupe_perms, dict) else False
+    has_facture_perm = menu_groupe_perms.get("facture_generer", False) if isinstance(menu_groupe_perms, dict) else False
+    
+    if not is_admin:
+        if pdf_type == "facture" and not has_facture_perm:
+            raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.facture_generer required")
+        elif pdf_type == "proposition" and not has_proposition_perm:
+            raise HTTPException(status_code=403, detail="Permission denied - menu_groupe.proposition_generer required")
+        elif pdf_type == "auto" and not (has_proposition_perm or has_facture_perm):
+            raise HTTPException(status_code=403, detail="Permission denied - menu_groupe permission required")
     
     reservation = await group_reservations_collection.find_one(
         {"reservation_id": reservation_id, "restaurant_id": user["restaurant_id"]},
